@@ -89,7 +89,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
               <p className="rounded-full bg-ink px-4 py-2 text-sm font-black text-paper">{lobby.round.wager ? `$${lobby.round.wager} en juego` : `tope $${lobby.round.maxBet}`}</p>
-              {lobby.round.phase === 'resolved' ? <ResultBanner lobbyRound={lobby.round} /> : null}
+              {lobby.round.phase === 'resolved' ? <ResultBanner lobbyRound={lobby.round} teams={lobby.teams} /> : null}
             </div>
           </div>
         ) : null}
@@ -156,10 +156,16 @@ function QuestionPanel({ round, state }: { round: NonNullable<CompanionLobby['ro
   </section>
 }
 
-function ResultBanner({ lobbyRound }: { lobbyRound: NonNullable<CompanionLobby['round']> }) {
+function ResultBanner({ lobbyRound, teams }: { lobbyRound: NonNullable<CompanionLobby['round']>; teams: CompanionLobby['teams'] }) {
   const result = lobbyRound.result
   if (!result) return null
-  return <p className="rounded-full bg-saffron px-3 py-2 text-sm font-black text-ink">{result.kind === 'tie' ? 'Empate: las apuestas quedan intactas.' : `Pozo repartido: $${result.payout} por ganador.`}</p>
+  if (result.kind === 'tie') return <p className="rounded-full bg-saffron px-3 py-2 text-sm font-black text-ink">Empate: las apuestas quedan intactas.</p>
+
+  const winnerNames = result.winnerTeamIds.map((teamId) => teams.find((team) => team.id === teamId)?.name).filter((name): name is string => Boolean(name))
+  const winners = winnerNames.length > 1 ? `${winnerNames.slice(0, -1).join(', ')} y ${winnerNames.at(-1)}` : winnerNames[0] ?? 'El equipo ganador'
+  const message = winnerNames.length > 1 ? `Ganaron ${winners} · $${result.payout} para cada equipo.` : `Ganó ${winners} · cobra $${result.payout}.`
+
+  return <p className="rounded-full bg-saffron px-3 py-2 text-sm font-black text-ink">{message}</p>
 }
 
 function RevealPanel({ answers, card }: { answers: Array<{ answer: unknown; teamId: Id<'teams'>; teamName: string }>; card: PublicCard }) {
