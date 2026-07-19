@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -65,6 +66,16 @@ function FinishedBoard({ lobby }: { lobby: CompanionLobby }) {
 
 function GameBoard({ lobby }: { lobby: CompanionLobby }) {
   const cardIsOnTable = Boolean(lobby.round && lobby.roundState && lobby.round.phase !== 'resolved')
+  const resolvedRoundId = lobby.round?.phase === 'resolved' ? lobby.round.roundId : undefined
+  const [dismissedMetricsRoundId, setDismissedMetricsRoundId] = useState<string | undefined>()
+  const metricsToastVisible = Boolean(resolvedRoundId && dismissedMetricsRoundId !== resolvedRoundId)
+
+  useEffect(() => {
+    if (!resolvedRoundId) return
+
+    const timeout = window.setTimeout(() => setDismissedMetricsRoundId(resolvedRoundId), 6_000)
+    return () => window.clearTimeout(timeout)
+  }, [resolvedRoundId])
 
   return (
     <>
@@ -93,7 +104,6 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
             </div>
           </div>
         ) : null}
-        {lobby.round?.phase === 'resolved' ? <MetricsPanel teams={lobby.teams} /> : null}
         <section className="mt-5 rounded-[1.5rem] border border-paper/10 bg-ink/25 p-3 sm:p-4">
           <p className="px-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-paper/55">Equipos</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -113,6 +123,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
         </section>
       </section>
       {cardIsOnTable && lobby.round && lobby.roundState ? <ActiveCardModal round={lobby.round} state={lobby.roundState} /> : null}
+      {metricsToastVisible ? <MetricsToast teams={lobby.teams} /> : null}
     </>
   )
 }
@@ -135,8 +146,8 @@ function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean 
   )
 }
 
-function MetricsPanel({ teams }: { teams: CompanionLobby['teams'] }) {
-  return <section className="mt-6 rounded-2xl border border-mint/30 bg-mint/10 p-4 text-left"><p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-mint">Ritmo y precisión acumulados</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{teams.map((team) => { const averageSeconds = team.answeredCards ? Math.round(team.totalResponseMs / team.answeredCards / 1000) : null; return <div key={team.id} className="rounded-xl bg-paper/10 px-3 py-2"><p className="font-bold">{team.name}</p><p className="mt-1 text-xs text-paper/70">{team.correctMarks} aciertos · {averageSeconds === null ? 'sin respuestas aún' : `${averageSeconds}s de ritmo medio`}</p></div> })}</div></section>
+function MetricsToast({ teams }: { teams: CompanionLobby['teams'] }) {
+  return <aside aria-live="polite" className="fixed bottom-4 right-4 z-40 w-[min(23rem,calc(100vw-2rem))] rounded-[1.5rem] border border-mint/35 bg-ink/95 p-4 text-left text-paper shadow-[0_18px_55px_rgb(0_0_0_/_0.5)] backdrop-blur-md sm:bottom-6 sm:right-6"><p className="text-[0.58rem] font-black uppercase tracking-[0.2em] text-mint">Ritmo y precisión</p><div className="mt-3 grid grid-cols-2 gap-2">{teams.map((team) => { const averageSeconds = team.answeredCards ? Math.round(team.totalResponseMs / team.answeredCards / 1000) : null; return <div key={team.id} className="min-w-0 rounded-xl bg-paper/8 px-3 py-2"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: team.color }} /><p className="truncate text-sm font-bold">{team.name}</p></div><p className="mt-1 text-xs text-paper/65">{team.correctMarks} aciertos · {averageSeconds === null ? '—' : `${averageSeconds}s`}</p></div> })}</div></aside>
 }
 
 function QuestionPanel({ round, state }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']> }) {
