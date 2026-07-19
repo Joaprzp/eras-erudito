@@ -198,7 +198,7 @@ function TeamTokenLayer({ className, columns, teams }: { className: string; colu
     previousRects.current = nextRects
   }, [layoutKey])
 
-  return <div ref={layerRef} className={`pointer-events-none absolute inset-0 z-10 grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9' : 'grid-cols-14'} ${className}`}>
+  return <div ref={layerRef} className={`pointer-events-none absolute inset-0 z-10 grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9 grid-rows-6' : 'grid-cols-14 grid-rows-4'} ${className}`}>
     {Array.from(teamsByPosition.entries()).flatMap(([position, teamsAtPosition]) => teamsAtPosition.map((team, index) => {
       const slot = tokenSlot(index, teamsAtPosition.length)
       return <span key={team.id} data-team-token={team.id} className="relative" style={{ gridColumn: position % columns + 1, gridRow: Math.floor(position / columns) + 1 }}><span title={team.name} className="absolute grid place-items-center rounded-[35%] border-2 border-ink/35 text-[clamp(0.5rem,1.25vw,1rem)] font-black text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.25)]" style={{ backgroundColor: team.color, height: `${slot.height}%`, left: `${slot.left}%`, top: `${slot.top}%`, width: `${slot.width}%` }}>{team.name.slice(0, 1).toUpperCase()}</span></span>
@@ -207,14 +207,14 @@ function TeamTokenLayer({ className, columns, teams }: { className: string; colu
 }
 
 function tokenSlot(index: number, count: number) {
-  if (count === 1) return { height: 86, left: 7, top: 7, width: 86 }
-  if (count === 2) return { height: 86, left: index === 0 ? 5 : 52, top: 7, width: 43 }
+  if (count === 1) return { height: 68, left: 16, top: 16, width: 68 }
+  if (count === 2) return { height: 66, left: index === 0 ? 12 : 54, top: 17, width: 34 }
 
   const slots = [
-    { height: 43, left: 5, top: 5, width: 43 },
-    { height: 43, left: 52, top: 5, width: 43 },
-    { height: 43, left: 5, top: 52, width: 43 },
-    { height: 43, left: 52, top: 52, width: 43 },
+    { height: 36, left: 12, top: 12, width: 36 },
+    { height: 36, left: 52, top: 12, width: 36 },
+    { height: 36, left: 12, top: 52, width: 36 },
+    { height: 36, left: 52, top: 52, width: 36 },
   ]
   return slots[index] ?? slots[0]
 }
