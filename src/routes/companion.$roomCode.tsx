@@ -98,15 +98,23 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
         </div>
       ) : null}
       {lobby.round?.phase === 'resolved' ? <MetricsPanel teams={lobby.teams} /> : null}
-      <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {lobby.teams.map((team) => (
-          <div key={team.id} className="flex items-center gap-3 rounded-xl bg-paper/10 px-3 py-3">
-            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: team.color }} />
-            <span className="font-bold">{team.name}</span>
-            <span className="ml-auto text-xs text-paper/65">${team.money} · {team.coins} monedas · {team.correctMarks} aciertos · casillero {team.position}</span>
-          </div>
-        ))}
-      </div>
+      <section className="mt-5 rounded-[1.5rem] border border-paper/10 bg-ink/25 p-3 sm:p-4">
+        <p className="px-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-paper/55">Equipos</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {lobby.teams.map((team) => (
+            <div key={team.id} className="rounded-2xl border border-paper/10 bg-paper/8 p-3 sm:p-4">
+              <div className="flex items-center gap-2.5">
+                <span className="h-3.5 w-3.5 rounded-full ring-2 ring-paper/10" style={{ backgroundColor: team.color }} />
+                <span className="truncate font-display text-xl tracking-[-0.035em]">{team.name}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-paper px-3 py-1.5 text-sm font-black text-ink">${team.money}</span>
+                <span className="rounded-full bg-saffron px-3 py-1.5 text-sm font-black text-ink">{team.coins} {team.coins === 1 ? 'moneda' : 'monedas'}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     </section>
   )
 }
