@@ -67,56 +67,58 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
   const cardIsOnTable = Boolean(lobby.round && lobby.roundState && lobby.round.phase !== 'resolved')
 
   return (
-    <section className="mt-4 w-full rounded-[2rem] border border-paper/20 bg-paper/8 p-4 text-left shadow-[0_24px_90px_rgb(0_0_0_/_0.22)] sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-4 lg:px-2">
-        <div>
-          <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Partida en curso</p>
-          <h2 className="mt-1 font-display text-3xl tracking-[-0.05em] lg:text-4xl">La mesa está servida.</h2>
+    <>
+      <section className="mt-4 w-full rounded-[2rem] border border-paper/20 bg-paper/8 p-4 text-left shadow-[0_24px_90px_rgb(0_0_0_/_0.22)] sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 lg:px-2">
+          <div>
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Partida en curso</p>
+            <h2 className="mt-1 font-display text-3xl tracking-[-0.05em] lg:text-4xl">La mesa está servida.</h2>
+          </div>
+          <p className="rounded-full bg-saffron px-4 py-2 text-sm font-black text-ink">Última tirada: {lobby.lastRoll ?? '—'}</p>
         </div>
-        <p className="rounded-full bg-saffron px-4 py-2 text-sm font-black text-ink">Última tirada: {lobby.lastRoll ?? '—'}</p>
-      </div>
 
-      <div className={`relative mt-5 overflow-hidden rounded-[1.65rem] border border-paper/10 bg-ink/35 ${cardIsOnTable ? 'min-h-[29rem] lg:min-h-[31rem]' : ''}`}>
-        <BoardStrip lobby={lobby} dimmed={cardIsOnTable} />
-        {cardIsOnTable && lobby.round && lobby.roundState ? (
-          <div className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 px-3 sm:px-8 lg:px-16 xl:px-24">
-            <QuestionPanel round={lobby.round} state={lobby.roundState} />
+        <div className="mt-5 overflow-hidden rounded-[1.65rem] border border-paper/10 bg-ink/35">
+          <BoardStrip lobby={lobby} dimmed={cardIsOnTable} />
+        </div>
+
+        {lobby.round && !cardIsOnTable ? (
+          <div className="mt-5 rounded-2xl bg-paper p-4 text-ink sm:flex sm:items-center sm:justify-between sm:gap-6">
+            <div>
+              <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-coral">Ronda actual · {lobby.round.phase === 'choose_category' ? 'Inicio' : CATEGORY_LABELS[lobby.round.category]}</p>
+              <p className="mt-1 font-display text-2xl tracking-[-0.05em] sm:text-3xl">{roundMessage(lobby)}</p>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
+              <p className="rounded-full bg-ink px-4 py-2 text-sm font-black text-paper">{lobby.round.wager ? `$${lobby.round.wager} en juego` : `tope $${lobby.round.maxBet}`}</p>
+              {lobby.round.phase === 'resolved' ? <ResultBanner lobbyRound={lobby.round} /> : null}
+            </div>
           </div>
         ) : null}
-      </div>
-
-      {lobby.round && !cardIsOnTable ? (
-        <div className="mt-5 rounded-2xl bg-paper p-4 text-ink sm:flex sm:items-center sm:justify-between sm:gap-6">
-          <div>
-            <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-coral">Ronda actual · {lobby.round.phase === 'choose_category' ? 'Inicio' : CATEGORY_LABELS[lobby.round.category]}</p>
-            <p className="mt-1 font-display text-2xl tracking-[-0.05em] sm:text-3xl">{roundMessage(lobby)}</p>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
-            <p className="rounded-full bg-ink px-4 py-2 text-sm font-black text-paper">{lobby.round.wager ? `$${lobby.round.wager} en juego` : `tope $${lobby.round.maxBet}`}</p>
-            {lobby.round.phase === 'resolved' ? <ResultBanner lobbyRound={lobby.round} /> : null}
-          </div>
-        </div>
-      ) : null}
-      {lobby.round?.phase === 'resolved' ? <MetricsPanel teams={lobby.teams} /> : null}
-      <section className="mt-5 rounded-[1.5rem] border border-paper/10 bg-ink/25 p-3 sm:p-4">
-        <p className="px-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-paper/55">Equipos</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {lobby.teams.map((team) => (
-            <div key={team.id} className="rounded-2xl border border-paper/10 bg-paper/8 p-3 sm:p-4">
-              <div className="flex items-center gap-2.5">
-                <span className="h-3.5 w-3.5 rounded-full ring-2 ring-paper/10" style={{ backgroundColor: team.color }} />
-                <span className="truncate font-display text-xl tracking-[-0.035em]">{team.name}</span>
+        {lobby.round?.phase === 'resolved' ? <MetricsPanel teams={lobby.teams} /> : null}
+        <section className="mt-5 rounded-[1.5rem] border border-paper/10 bg-ink/25 p-3 sm:p-4">
+          <p className="px-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-paper/55">Equipos</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {lobby.teams.map((team) => (
+              <div key={team.id} className="rounded-2xl border border-paper/10 bg-paper/8 p-3 sm:p-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-3.5 w-3.5 rounded-full ring-2 ring-paper/10" style={{ backgroundColor: team.color }} />
+                  <span className="truncate font-display text-xl tracking-[-0.035em]">{team.name}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-paper px-3 py-1.5 text-sm font-black text-ink">${team.money}</span>
+                  <span className="rounded-full bg-saffron px-3 py-1.5 text-sm font-black text-ink">{team.coins} {team.coins === 1 ? 'moneda' : 'monedas'}</span>
+                </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full bg-paper px-3 py-1.5 text-sm font-black text-ink">${team.money}</span>
-                <span className="rounded-full bg-saffron px-3 py-1.5 text-sm font-black text-ink">{team.coins} {team.coins === 1 ? 'moneda' : 'monedas'}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </section>
       </section>
-    </section>
+      {cardIsOnTable && lobby.round && lobby.roundState ? <ActiveCardModal round={lobby.round} state={lobby.roundState} /> : null}
+    </>
   )
+}
+
+function ActiveCardModal({ round, state }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']> }) {
+  return <div aria-label="Tarjeta en juego" aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-ink/80 px-3 py-4 backdrop-blur-md sm:px-8 sm:py-8" role="dialog"><div className="max-h-full w-full max-w-5xl overflow-y-auto rounded-[2rem]"><QuestionPanel round={round} state={state} /></div></div>
 }
 
 function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean }) {
