@@ -1,0 +1,16 @@
+# Dependencies and generated output
+node_modules/
+dist/
+
+# Local configuration
+.env
+.env.local
+.env.*.local
+
+# Tooling output
+coverage/
+*.tsbuildinfo
+src/routeTree.gen.ts
+
+# Operating system files
+.DS_Store

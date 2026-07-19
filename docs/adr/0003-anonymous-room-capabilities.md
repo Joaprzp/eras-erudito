@@ -1,0 +1,3 @@
+# Usar credenciales efímeras por sala y equipo en lugar de cuentas
+
+Las partidas no tendrán registro ni autenticación de usuarios. Al crear una Sala se emitirán credenciales aleatorias no adivinables para la pantalla companion y para cada Equipo; Convex las usará para autorizar las acciones de cada dispositivo durante la Partida. El código y QR permiten entrar a la Sala, pero el permiso se conserva solo en la credencial del navegador y se elimina con la Partida. Una recarga o desconexión breve recupera el mismo Equipo desde ese navegador; en una Sala cerrada no se sustituye un Equipo desde otro dispositivo.
