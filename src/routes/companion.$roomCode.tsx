@@ -26,10 +26,10 @@ function CompanionRoom() {
   return (
     <main className={isActiveGame ? 'min-h-screen bg-ink px-3 py-3 text-paper sm:px-6 sm:py-5 lg:px-8' : 'grid min-h-screen place-items-center bg-ink px-6 text-center text-paper'}>
       <div className={isActiveGame ? 'mx-auto w-full max-w-[110rem]' : 'max-w-xl'}>
-        <div className={isActiveGame ? 'flex items-baseline justify-between gap-4 px-2 text-left lg:px-3' : ''}>
+        {!isActiveGame ? <>
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-mint">Pantalla companion</p>
-          <h1 className={isActiveGame ? 'font-display text-3xl tracking-[-0.06em] sm:text-4xl' : 'mt-3 font-display text-6xl tracking-[-0.06em]'}>Sala {roomCode}</h1>
-        </div>
+          <h1 className="mt-3 font-display text-6xl tracking-[-0.06em]">Sala {roomCode}</h1>
+        </> : null}
         {!token ? <p className="mt-5 text-coral">Falta la credencial de companion.</p> : null}
         {token && lobby === undefined ? <p className="mt-5 text-paper/65">Abriendo la sala…</p> : null}
         {token && lobby === null ? <p className="mt-5 text-coral">No encontramos esta sala.</p> : null}
@@ -79,11 +79,11 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
 
   return (
     <>
-      <section className="mt-4 w-full rounded-[2rem] border border-paper/20 bg-paper/8 p-4 text-left shadow-[0_24px_90px_rgb(0_0_0_/_0.22)] sm:p-6">
+      <section className="w-full rounded-[2rem] border border-paper/20 bg-paper/8 p-4 text-left shadow-[0_24px_90px_rgb(0_0_0_/_0.22)] sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-4 lg:px-2">
           <div>
-            <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Partida en curso</p>
-            <h2 className="mt-1 font-display text-3xl tracking-[-0.05em] lg:text-4xl">La mesa está servida.</h2>
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Sala {lobby.code} · partida en curso</p>
+            <h1 className="mt-1 font-display text-3xl tracking-[-0.05em] lg:text-4xl">La mesa está servida.</h1>
           </div>
           <p className="rounded-full bg-saffron px-4 py-2 text-sm font-black text-ink">Última tirada: {lobby.lastRoll ?? '—'}</p>
         </div>
