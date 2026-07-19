@@ -61,31 +61,41 @@ function FinishedBoard({ lobby }: { lobby: CompanionLobby }) {
 }
 
 function GameBoard({ lobby }: { lobby: CompanionLobby }) {
+  const cardIsOnTable = Boolean(lobby.round && lobby.roundState && lobby.round.phase !== 'resolved')
+
   return (
-    <section className="mt-8 w-full max-w-6xl rounded-[2rem] border border-paper/20 bg-paper/8 p-4 text-left sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <section className="mt-6 w-full max-w-[90rem] rounded-[2rem] border border-paper/20 bg-paper/8 p-4 text-left shadow-[0_24px_90px_rgb(0_0_0_/_0.22)] sm:p-6 lg:mt-4">
+      <div className="flex flex-wrap items-end justify-between gap-4 lg:px-2">
         <div>
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Partida en curso</p>
-          <h2 className="mt-1 font-display text-4xl tracking-[-0.05em]">La mesa está servida.</h2>
+          <h2 className="mt-1 font-display text-3xl tracking-[-0.05em] lg:text-4xl">La mesa está servida.</h2>
         </div>
         <p className="rounded-full bg-saffron px-4 py-2 text-sm font-black text-ink">Última tirada: {lobby.lastRoll ?? '—'}</p>
       </div>
-      <div className="mt-6 grid grid-cols-9 gap-1.5 sm:grid-cols-14">
-        <BoardCell label="Inicio" teams={lobby.teams.filter((team) => team.position === 0)} />
-        {lobby.board.map((space, index) => (
-          <BoardCell key={index} label={`$${space.maxBet}`} category={space.category} shop={space.isShop} teams={lobby.teams.filter((team) => team.position === index + 1)} />
-        ))}
+
+      <div className={`relative mt-5 overflow-hidden rounded-[1.65rem] border border-paper/10 bg-ink/35 ${cardIsOnTable ? 'min-h-[29rem] lg:min-h-[31rem]' : ''}`}>
+        <BoardStrip lobby={lobby} dimmed={cardIsOnTable} />
+        {cardIsOnTable && lobby.round && lobby.roundState ? (
+          <div className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 px-3 sm:px-8 lg:px-16">
+            <QuestionPanel round={lobby.round} state={lobby.roundState} />
+          </div>
+        ) : null}
       </div>
-      {lobby.round ? <div className="mt-6 rounded-2xl bg-paper p-4 text-ink sm:flex sm:items-center sm:justify-between sm:gap-6">
-        <div>
-          <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-coral">Ronda actual · {lobby.round.phase === 'choose_category' ? 'Inicio' : CATEGORY_LABELS[lobby.round.category]}</p>
-          <p className="mt-1 font-display text-3xl tracking-[-0.05em]">{roundMessage(lobby)}</p>
+
+      {lobby.round && !cardIsOnTable ? (
+        <div className="mt-5 rounded-2xl bg-paper p-4 text-ink sm:flex sm:items-center sm:justify-between sm:gap-6">
+          <div>
+            <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-coral">Ronda actual · {lobby.round.phase === 'choose_category' ? 'Inicio' : CATEGORY_LABELS[lobby.round.category]}</p>
+            <p className="mt-1 font-display text-2xl tracking-[-0.05em] sm:text-3xl">{roundMessage(lobby)}</p>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
+            <p className="rounded-full bg-ink px-4 py-2 text-sm font-black text-paper">{lobby.round.wager ? `$${lobby.round.wager} en juego` : `tope $${lobby.round.maxBet}`}</p>
+            {lobby.round.phase === 'resolved' ? <ResultBanner lobbyRound={lobby.round} /> : null}
+          </div>
         </div>
-        <p className="mt-3 rounded-full bg-ink px-4 py-2 text-sm font-black text-paper sm:mt-0">{lobby.round.wager ? `$${lobby.round.wager} en juego` : `tope $${lobby.round.maxBet}`}</p>
-      </div> : null}
-      {lobby.round && lobby.roundState ? <QuestionPanel round={lobby.round} state={lobby.roundState} /> : null}
+      ) : null}
       {lobby.round?.phase === 'resolved' ? <MetricsPanel teams={lobby.teams} /> : null}
-      <div className="mt-6 grid gap-2 sm:grid-cols-2">
+      <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {lobby.teams.map((team) => (
           <div key={team.id} className="flex items-center gap-3 rounded-xl bg-paper/10 px-3 py-3">
             <span className="h-3 w-3 rounded-full" style={{ backgroundColor: team.color }} />
@@ -98,6 +108,20 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
   )
 }
 
+function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean }) {
+  return (
+    <div className={`p-3 transition duration-500 sm:p-5 lg:p-7 ${dimmed ? 'opacity-35 blur-[1px]' : ''}`}>
+      <div className="grid grid-cols-9 gap-1.5 sm:grid-cols-14 lg:gap-2">
+        <BoardCell label="Inicio" teams={lobby.teams.filter((team) => team.position === 0)} />
+        {lobby.board.map((space, index) => (
+          <BoardCell key={index} label={`$${space.maxBet}`} category={space.category} shop={space.isShop} teams={lobby.teams.filter((team) => team.position === index + 1)} />
+        ))}
+      </div>
+      {dimmed ? <p className="mt-5 text-center text-[0.58rem] font-black uppercase tracking-[0.22em] text-paper/60">Tablero en pausa · la tarjeta está en juego</p> : null}
+    </div>
+  )
+}
+
 function MetricsPanel({ teams }: { teams: CompanionLobby['teams'] }) {
   return <section className="mt-6 rounded-2xl border border-mint/30 bg-mint/10 p-4 text-left"><p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-mint">Ritmo y precisión acumulados</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{teams.map((team) => { const averageSeconds = team.answeredCards ? Math.round(team.totalResponseMs / team.answeredCards / 1000) : null; return <div key={team.id} className="rounded-xl bg-paper/10 px-3 py-2"><p className="font-bold">{team.name}</p><p className="mt-1 text-xs text-paper/70">{team.correctMarks} aciertos · {averageSeconds === null ? 'sin respuestas aún' : `${averageSeconds}s de ritmo medio`}</p></div> })}</div></section>
 }
@@ -106,32 +130,31 @@ function QuestionPanel({ round, state }: { round: NonNullable<CompanionLobby['ro
   const card = state.card
   const heading = card.category === 'sequence' || card.category === 'association' ? card.instruction : card.category === 'common' ? '¿Qué tienen en común?' : card.prompt
 
-  return <section className="mt-6 rounded-2xl border border-paper/30 bg-paper/14 p-5 text-left">
-    <div className="flex items-baseline justify-between gap-4">
-      <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-mint">Tarjeta en mesa · {CATEGORY_LABELS[card.category]}</p>
-      <p className="text-xs font-bold text-paper/70">{state.responseCount}/{state.requiredResponseCount} respuestas</p>
+  return <section className="mx-auto max-w-3xl rounded-[2rem] border-[3px] border-ink/15 bg-paper p-5 text-left text-ink shadow-[0_28px_80px_rgb(0_0_0_/_0.5)] sm:p-7 lg:max-w-4xl lg:p-8">
+    <div className="flex items-baseline justify-between gap-4 border-b border-ink/12 pb-4">
+      <p className={`rounded-full px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.18em] ${CARD_CATEGORY_CLASS[card.category]}`}>Tarjeta en mesa · {CATEGORY_LABELS[card.category]}</p>
+      <p className="text-xs font-bold text-ink/60">{state.responseCount}/{state.requiredResponseCount} respuestas</p>
     </div>
-    <p className="mt-2 font-display text-3xl leading-tight tracking-[-0.04em]">{heading}</p>
-    {card.category === 'sequence' ? <div className="mt-4 flex flex-wrap gap-2">{card.items.map((item) => <span key={item} className="rounded-full bg-paper/15 px-3 py-1.5 text-sm font-bold">{item}</span>)}</div> : null}
-    {card.category === 'association' ? <div className="mt-4 grid grid-cols-2 gap-2 text-sm font-bold">{card.leftItems.map((item) => <span key={item} className="rounded-lg bg-paper/12 px-3 py-2">{item}</span>)}{card.rightItems.map((item) => <span key={item} className="rounded-lg bg-paper/12 px-3 py-2">{item}</span>)}</div> : null}
-    {card.category === 'common' ? <div className="mt-4 flex flex-wrap gap-2">{card.clues.map((clue) => <span key={clue} className="rounded-full bg-paper/15 px-3 py-1.5 text-sm font-bold">{clue}</span>)}</div> : null}
-    {round.phase === 'revealed' || round.phase === 'resolved' ? <RevealPanel card={card} answers={state.revealedResponses ?? []} /> : <p className="mt-4 text-sm font-semibold text-paper/65">Las respuestas siguen privadas hasta la revelación.</p>}
-    {round.phase === 'resolved' ? <ResultBanner lobbyRound={round} /> : null}
+    <p className="mt-5 font-display text-3xl leading-[0.95] tracking-[-0.055em] sm:text-4xl lg:text-5xl">{heading}</p>
+    {card.category === 'sequence' ? <div className="mt-5 flex flex-wrap gap-2">{card.items.map((item) => <span key={item} className="rounded-full bg-ink/8 px-3 py-1.5 text-sm font-bold sm:px-4 sm:py-2">{item}</span>)}</div> : null}
+    {card.category === 'association' ? <div className="mt-5 grid grid-cols-2 gap-2 text-sm font-bold sm:gap-3 sm:text-base">{card.leftItems.map((item) => <span key={item} className="rounded-xl bg-ink/8 px-3 py-2.5">{item}</span>)}{card.rightItems.map((item) => <span key={item} className="rounded-xl bg-ink/8 px-3 py-2.5">{item}</span>)}</div> : null}
+    {card.category === 'common' ? <div className="mt-5 flex flex-wrap gap-2">{card.clues.map((clue) => <span key={clue} className="rounded-full bg-ink/8 px-3 py-1.5 text-sm font-bold sm:px-4 sm:py-2">{clue}</span>)}</div> : null}
+    {round.phase === 'revealed' ? <RevealPanel card={card} answers={state.revealedResponses ?? []} /> : <p className="mt-5 text-sm font-semibold text-ink/55">Las respuestas siguen privadas hasta la revelación.</p>}
   </section>
 }
 
 function ResultBanner({ lobbyRound }: { lobbyRound: NonNullable<CompanionLobby['round']> }) {
   const result = lobbyRound.result
   if (!result) return null
-  return <p className="mt-4 rounded-xl bg-saffron px-3 py-2 text-sm font-black text-ink">{result.kind === 'tie' ? 'Empate: las apuestas quedan intactas.' : `Pozo repartido: $${result.payout} por ganador.`}</p>
+  return <p className="rounded-full bg-saffron px-3 py-2 text-sm font-black text-ink">{result.kind === 'tie' ? 'Empate: las apuestas quedan intactas.' : `Pozo repartido: $${result.payout} por ganador.`}</p>
 }
 
 function RevealPanel({ answers, card }: { answers: Array<{ answer: unknown; teamId: Id<'teams'>; teamName: string }>; card: PublicCard }) {
   const solution = card.solution
-  return <div className="mt-5 border-t border-paper/20 pt-4">
-    <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-saffron">Solución</p>
+  return <div className="mt-5 border-t border-ink/12 pt-4">
+    <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-coral">Solución</p>
     <p className="mt-1 font-display text-2xl tracking-[-0.04em]">{typeof solution === 'string' ? solution : Array.isArray(solution) ? solution.map((item) => typeof item === 'string' ? item : `${item.left} — ${item.right}`).join(' · ') : solution?.display}</p>
-    <div className="mt-4 grid gap-2 sm:grid-cols-2">{answers.map((entry) => <div key={entry.teamId} className="rounded-xl bg-paper/10 px-3 py-2"><p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-mint">{entry.teamName}</p><p className="mt-1 text-sm font-semibold">{formatAnswer(entry.answer)}</p></div>)}</div>
+    <div className="mt-4 grid gap-2 sm:grid-cols-2">{answers.map((entry) => <div key={entry.teamId} className="rounded-xl bg-ink/8 px-3 py-2"><p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-ink/55">{entry.teamName}</p><p className="mt-1 text-sm font-semibold">{formatAnswer(entry.answer)}</p></div>)}</div>
   </div>
 }
 
@@ -193,6 +216,13 @@ type CompanionLobby = {
 }
 
 const CATEGORY_LABELS = { sequence: 'Secuencia', association: 'Asociación', common: 'En común', approximation: 'Aproximación' }
+
+const CARD_CATEGORY_CLASS = {
+  sequence: 'bg-coral text-ink',
+  association: 'bg-saffron text-ink',
+  common: 'bg-mint text-ink',
+  approximation: 'bg-sky-400 text-ink',
+}
 
 type PublicCard =
   | { category: 'sequence'; id: string; instruction: string; items: string[]; solution?: string[] }
