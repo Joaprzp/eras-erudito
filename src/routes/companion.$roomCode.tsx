@@ -195,8 +195,17 @@ function roundMessage(lobby: CompanionLobby) {
 
 function BoardCell({ category, label, shop = false, teams = [] }: { category?: string; label: string; shop?: boolean; teams?: Array<Pick<CompanionLobby['teams'][number], 'color' | 'id' | 'name'>> }) {
   const categoryClass = category === 'sequence' ? 'bg-coral' : category === 'association' ? 'bg-saffron' : category === 'common' ? 'bg-mint' : category === 'approximation' ? 'bg-sky-400' : 'bg-paper'
+  const tokenGridClass = teams.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
 
-  return <div className={`relative grid aspect-square min-w-0 place-items-center rounded-md ${categoryClass} text-[0.5rem] font-black text-ink sm:text-[0.6rem]`}>{label}{teams.length ? <span className="absolute -bottom-1 -left-1 flex -space-x-1">{teams.map((team) => <span key={team.id} title={team.name} className="h-3 w-3 rounded-full border border-ink bg-current" style={{ color: team.color }} />)}</span> : null}{shop ? <span className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-ink text-[0.48rem] text-saffron">E</span> : null}</div>
+  return <div className={`relative grid aspect-square min-w-0 place-items-center overflow-hidden rounded-md ${categoryClass} text-[0.5rem] font-black text-ink sm:text-[0.6rem]`}>
+    {teams.length ? <>
+      <span className="absolute left-[5%] top-[5%] z-20 rounded bg-paper/90 px-1 py-0.5 text-[0.48rem] leading-none shadow-sm sm:text-[0.55rem]">{label}</span>
+      <span className={`absolute inset-[7%] z-10 grid gap-[5%] ${tokenGridClass}`}>
+        {teams.map((team) => <span key={team.id} title={team.name} className="grid h-full w-full place-items-center rounded-[35%] border-2 border-ink/35 text-[clamp(0.5rem,1.25vw,1rem)] font-black text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.25)]" style={{ backgroundColor: team.color }}>{team.name.slice(0, 1).toUpperCase()}</span>)}
+      </span>
+    </> : <span>{label}</span>}
+    {shop ? <span className="absolute right-[5%] top-[5%] z-20 grid h-4 w-4 place-items-center rounded-full bg-ink text-[0.48rem] text-saffron">E</span> : null}
+  </div>
 }
 
 type CompanionLobby = {
