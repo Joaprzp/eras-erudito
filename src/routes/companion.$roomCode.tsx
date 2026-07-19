@@ -20,12 +20,15 @@ function CompanionRoom() {
     token ? { code: roomCode, companionToken: token } : 'skip',
   )
   const joinUrl = `${window.location.origin}/team/${roomCode}`
+  const isActiveGame = lobby?.phase === 'active'
 
   return (
-    <main className="grid min-h-screen place-items-center bg-ink px-6 text-center text-paper">
-      <div className="max-w-xl">
-        <p className="text-xs font-bold uppercase tracking-[0.24em] text-mint">Pantalla companion</p>
-        <h1 className="mt-3 font-display text-6xl tracking-[-0.06em]">Sala {roomCode}</h1>
+    <main className={isActiveGame ? 'min-h-screen bg-ink px-3 py-3 text-paper sm:px-6 sm:py-5 lg:px-8' : 'grid min-h-screen place-items-center bg-ink px-6 text-center text-paper'}>
+      <div className={isActiveGame ? 'mx-auto w-full max-w-[110rem]' : 'max-w-xl'}>
+        <div className={isActiveGame ? 'flex items-baseline justify-between gap-4 px-2 text-left lg:px-3' : ''}>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-mint">Pantalla companion</p>
+          <h1 className={isActiveGame ? 'font-display text-3xl tracking-[-0.06em] sm:text-4xl' : 'mt-3 font-display text-6xl tracking-[-0.06em]'}>Sala {roomCode}</h1>
+        </div>
         {!token ? <p className="mt-5 text-coral">Falta la credencial de companion.</p> : null}
         {token && lobby === undefined ? <p className="mt-5 text-paper/65">Abriendo la sala…</p> : null}
         {token && lobby === null ? <p className="mt-5 text-coral">No encontramos esta sala.</p> : null}
@@ -64,7 +67,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
   const cardIsOnTable = Boolean(lobby.round && lobby.roundState && lobby.round.phase !== 'resolved')
 
   return (
-    <section className="mt-6 w-full max-w-[90rem] rounded-[2rem] border border-paper/20 bg-paper/8 p-4 text-left shadow-[0_24px_90px_rgb(0_0_0_/_0.22)] sm:p-6 lg:mt-4">
+    <section className="mt-4 w-full rounded-[2rem] border border-paper/20 bg-paper/8 p-4 text-left shadow-[0_24px_90px_rgb(0_0_0_/_0.22)] sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-4 lg:px-2">
         <div>
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Partida en curso</p>
@@ -76,7 +79,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
       <div className={`relative mt-5 overflow-hidden rounded-[1.65rem] border border-paper/10 bg-ink/35 ${cardIsOnTable ? 'min-h-[29rem] lg:min-h-[31rem]' : ''}`}>
         <BoardStrip lobby={lobby} dimmed={cardIsOnTable} />
         {cardIsOnTable && lobby.round && lobby.roundState ? (
-          <div className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 px-3 sm:px-8 lg:px-16">
+          <div className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 px-3 sm:px-8 lg:px-16 xl:px-24">
             <QuestionPanel round={lobby.round} state={lobby.roundState} />
           </div>
         ) : null}
@@ -130,7 +133,7 @@ function QuestionPanel({ round, state }: { round: NonNullable<CompanionLobby['ro
   const card = state.card
   const heading = card.category === 'sequence' || card.category === 'association' ? card.instruction : card.category === 'common' ? '¿Qué tienen en común?' : card.prompt
 
-  return <section className="mx-auto max-w-3xl rounded-[2rem] border-[3px] border-ink/15 bg-paper p-5 text-left text-ink shadow-[0_28px_80px_rgb(0_0_0_/_0.5)] sm:p-7 lg:max-w-4xl lg:p-8">
+  return <section className="mx-auto max-w-3xl rounded-[2rem] border-[3px] border-ink/15 bg-paper p-5 text-left text-ink shadow-[0_28px_80px_rgb(0_0_0_/_0.5)] sm:p-7 lg:max-w-5xl lg:p-8 xl:p-10">
     <div className="flex items-baseline justify-between gap-4 border-b border-ink/12 pb-4">
       <p className={`rounded-full px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.18em] ${CARD_CATEGORY_CLASS[card.category]}`}>Tarjeta en mesa · {CATEGORY_LABELS[card.category]}</p>
       <p className="text-xs font-bold text-ink/60">{state.responseCount}/{state.requiredResponseCount} respuestas</p>
