@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -68,13 +68,19 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
   const cardIsOnTable = Boolean(lobby.round && lobby.roundState && lobby.round.phase !== 'resolved')
   const resolvedRoundId = lobby.round?.phase === 'resolved' ? lobby.round.roundId : undefined
   const [dismissedMetricsRoundId, setDismissedMetricsRoundId] = useState<string | undefined>()
+  const [exitingMetricsRoundId, setExitingMetricsRoundId] = useState<string | undefined>()
   const metricsToastVisible = Boolean(resolvedRoundId && dismissedMetricsRoundId !== resolvedRoundId)
+  const metricsToastExiting = exitingMetricsRoundId === resolvedRoundId
 
   useEffect(() => {
     if (!resolvedRoundId) return
 
-    const timeout = window.setTimeout(() => setDismissedMetricsRoundId(resolvedRoundId), 6_000)
-    return () => window.clearTimeout(timeout)
+    const exitTimeout = window.setTimeout(() => setExitingMetricsRoundId(resolvedRoundId), 5_400)
+    const dismissTimeout = window.setTimeout(() => setDismissedMetricsRoundId(resolvedRoundId), 5_800)
+    return () => {
+      window.clearTimeout(exitTimeout)
+      window.clearTimeout(dismissTimeout)
+    }
   }, [resolvedRoundId])
 
   return (
@@ -85,7 +91,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Sala {lobby.code} · partida en curso</p>
             <h1 className="mt-1 font-display text-3xl tracking-[-0.05em] lg:text-4xl">La mesa está servida.</h1>
           </div>
-          <p className="rounded-full bg-saffron px-4 py-2 text-sm font-black text-ink">Última tirada: {lobby.lastRoll ?? '—'}</p>
+          <DiceRoll value={lobby.lastRoll} />
         </div>
 
         <div className="mt-5 overflow-hidden rounded-[1.65rem] border border-paper/10 bg-ink/35">
@@ -123,31 +129,98 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
         </section>
       </section>
       {cardIsOnTable && lobby.round && lobby.roundState ? <ActiveCardModal round={lobby.round} state={lobby.roundState} /> : null}
-      {metricsToastVisible ? <MetricsToast teams={lobby.teams} /> : null}
+      {metricsToastVisible ? <MetricsToast key={resolvedRoundId} exiting={metricsToastExiting} teams={lobby.teams} /> : null}
     </>
   )
 }
 
+function DiceRoll({ value }: { value?: number }) {
+  return <p aria-live="polite" className="flex items-center gap-2 rounded-full bg-saffron px-3 py-1.5 text-sm font-black text-ink"><span className="text-ink/70">Tirada</span><span key={value ?? 'empty'} className="companion-dice-roll grid h-7 min-w-7 place-items-center rounded-lg bg-ink px-1 text-paper shadow-[0_2px_0_rgb(0_0_0_/_0.22)]">{value ?? '—'}</span></p>
+}
+
 function ActiveCardModal({ round, state }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']> }) {
-  return <div aria-label="Tarjeta en juego" aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-ink/80 px-3 py-4 backdrop-blur-md sm:px-8 sm:py-8" role="dialog"><div className="max-h-full w-full max-w-5xl overflow-y-auto rounded-[2rem]"><QuestionPanel round={round} state={state} /></div></div>
+  return <div aria-label="Tarjeta en juego" aria-modal="true" className="companion-card-backdrop fixed inset-0 z-50 grid place-items-center bg-ink/80 px-3 py-4 backdrop-blur-md sm:px-8 sm:py-8" role="dialog"><div className="companion-card-enter max-h-full w-full max-w-5xl overflow-y-auto rounded-[2rem]"><QuestionPanel round={round} state={state} /></div></div>
 }
 
 function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean }) {
   return (
     <div className={`p-3 transition duration-500 sm:p-5 lg:p-7 ${dimmed ? 'opacity-35 blur-[1px]' : ''}`}>
-      <div className="grid grid-cols-9 gap-1.5 sm:grid-cols-14 lg:gap-2">
-        <BoardCell label="Inicio" teams={lobby.teams.filter((team) => team.position === 0)} />
-        {lobby.board.map((space, index) => (
-          <BoardCell key={index} label={`$${space.maxBet}`} category={space.category} shop={space.isShop} teams={lobby.teams.filter((team) => team.position === index + 1)} />
-        ))}
+      <div className="relative">
+        <div className="grid grid-cols-9 gap-1.5 sm:grid-cols-14 lg:gap-2">
+          <BoardCell label="Inicio" />
+          {lobby.board.map((space, index) => (
+            <BoardCell key={index} label={`$${space.maxBet}`} category={space.category} shop={space.isShop} />
+          ))}
+        </div>
+        <TeamTokenLayer className="sm:hidden" columns={9} teams={lobby.teams} />
+        <TeamTokenLayer className="hidden sm:grid" columns={14} teams={lobby.teams} />
       </div>
       {dimmed ? <p className="mt-5 text-center text-[0.58rem] font-black uppercase tracking-[0.22em] text-paper/60">Tablero en pausa · la tarjeta está en juego</p> : null}
     </div>
   )
 }
 
-function MetricsToast({ teams }: { teams: CompanionLobby['teams'] }) {
-  return <aside aria-live="polite" className="fixed bottom-4 right-4 z-40 w-[min(23rem,calc(100vw-2rem))] rounded-[1.5rem] border border-mint/35 bg-ink/95 p-4 text-left text-paper shadow-[0_18px_55px_rgb(0_0_0_/_0.5)] backdrop-blur-md sm:bottom-6 sm:right-6"><p className="text-[0.58rem] font-black uppercase tracking-[0.2em] text-mint">Ritmo y precisión</p><div className="mt-3 grid grid-cols-2 gap-2">{teams.map((team) => { const averageSeconds = team.answeredCards ? Math.round(team.totalResponseMs / team.answeredCards / 1000) : null; return <div key={team.id} className="min-w-0 rounded-xl bg-paper/8 px-3 py-2"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: team.color }} /><p className="truncate text-sm font-bold">{team.name}</p></div><p className="mt-1 text-xs text-paper/65">{team.correctMarks} aciertos · {averageSeconds === null ? '—' : `${averageSeconds}s`}</p></div> })}</div></aside>
+function TeamTokenLayer({ className, columns, teams }: { className: string; columns: number; teams: CompanionLobby['teams'] }) {
+  const layerRef = useRef<HTMLDivElement>(null)
+  const previousRects = useRef<Map<string, DOMRect>>(new Map())
+  const layoutKey = teams.map((team) => `${team.id}:${team.position}`).join('|')
+  const teamsByPosition = new Map<number, CompanionLobby['teams']>()
+
+  for (const team of teams) {
+    const teamsAtPosition = teamsByPosition.get(team.position) ?? []
+    teamsAtPosition.push(team)
+    teamsByPosition.set(team.position, teamsAtPosition)
+  }
+
+  useLayoutEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !layerRef.current) return
+
+    const nextRects = new Map<string, DOMRect>()
+    for (const token of layerRef.current.querySelectorAll<HTMLElement>('[data-team-token]')) {
+      const teamId = token.dataset.teamToken
+      if (!teamId) continue
+
+      const nextRect = token.getBoundingClientRect()
+      const previousRect = previousRects.current.get(teamId)
+      if (previousRect) {
+        const x = previousRect.left - nextRect.left
+        const y = previousRect.top - nextRect.top
+        if (Math.abs(x) > 1 || Math.abs(y) > 1) {
+          token.animate([
+            { transform: `translate(${x}px, ${y}px) scale(0.82)` },
+            { transform: 'translate(0, 0) scale(1.08)', offset: 0.78 },
+            { transform: 'translate(0, 0) scale(1)' },
+          ], { duration: 720, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+        }
+      }
+      nextRects.set(teamId, nextRect)
+    }
+    previousRects.current = nextRects
+  }, [layoutKey])
+
+  return <div ref={layerRef} className={`pointer-events-none absolute inset-0 z-10 grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9' : 'grid-cols-14'} ${className}`}>
+    {Array.from(teamsByPosition.entries()).flatMap(([position, teamsAtPosition]) => teamsAtPosition.map((team, index) => {
+      const slot = tokenSlot(index, teamsAtPosition.length)
+      return <span key={team.id} data-team-token={team.id} className="relative" style={{ gridColumn: position % columns + 1, gridRow: Math.floor(position / columns) + 1 }}><span title={team.name} className="absolute grid place-items-center rounded-[35%] border-2 border-ink/35 text-[clamp(0.5rem,1.25vw,1rem)] font-black text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.25)]" style={{ backgroundColor: team.color, height: `${slot.height}%`, left: `${slot.left}%`, top: `${slot.top}%`, width: `${slot.width}%` }}>{team.name.slice(0, 1).toUpperCase()}</span></span>
+    }))}
+  </div>
+}
+
+function tokenSlot(index: number, count: number) {
+  if (count === 1) return { height: 86, left: 7, top: 7, width: 86 }
+  if (count === 2) return { height: 86, left: index === 0 ? 5 : 52, top: 7, width: 43 }
+
+  const slots = [
+    { height: 43, left: 5, top: 5, width: 43 },
+    { height: 43, left: 52, top: 5, width: 43 },
+    { height: 43, left: 5, top: 52, width: 43 },
+    { height: 43, left: 52, top: 52, width: 43 },
+  ]
+  return slots[index] ?? slots[0]
+}
+
+function MetricsToast({ teams, exiting }: { teams: CompanionLobby['teams']; exiting: boolean }) {
+  return <aside aria-live="polite" className={`fixed bottom-4 right-4 z-40 w-[min(23rem,calc(100vw-2rem))] rounded-[1.5rem] border border-mint/35 bg-ink/95 p-4 text-left text-paper shadow-[0_18px_55px_rgb(0_0_0_/_0.5)] backdrop-blur-md sm:bottom-6 sm:right-6 ${exiting ? 'companion-toast-exit' : 'companion-toast-enter'}`}><p className="text-[0.58rem] font-black uppercase tracking-[0.2em] text-mint">Ritmo y precisión</p><div className="mt-3 grid grid-cols-2 gap-2">{teams.map((team) => { const averageSeconds = team.answeredCards ? Math.round(team.totalResponseMs / team.answeredCards / 1000) : null; return <div key={team.id} className="min-w-0 rounded-xl bg-paper/8 px-3 py-2"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: team.color }} /><p className="truncate text-sm font-bold">{team.name}</p></div><p className="mt-1 text-xs text-paper/65">{team.correctMarks} aciertos · {averageSeconds === null ? '—' : `${averageSeconds}s`}</p></div> })}</div></aside>
 }
 
 function QuestionPanel({ round, state }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']> }) {
@@ -210,17 +283,11 @@ function roundMessage(lobby: CompanionLobby) {
   return 'Tarjeta revelada.'
 }
 
-function BoardCell({ category, label, shop = false, teams = [] }: { category?: string; label: string; shop?: boolean; teams?: Array<Pick<CompanionLobby['teams'][number], 'color' | 'id' | 'name'>> }) {
+function BoardCell({ category, label, shop = false }: { category?: string; label: string; shop?: boolean }) {
   const categoryClass = category === 'sequence' ? 'bg-coral' : category === 'association' ? 'bg-saffron' : category === 'common' ? 'bg-mint' : category === 'approximation' ? 'bg-sky-400' : 'bg-paper'
-  const tokenGridClass = teams.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
 
   return <div className={`relative grid aspect-square min-w-0 place-items-center overflow-hidden rounded-md ${categoryClass} text-[0.5rem] font-black text-ink sm:text-[0.6rem]`}>
-    {teams.length ? <>
-      <span className="absolute left-[5%] top-[5%] z-20 rounded bg-paper/90 px-1 py-0.5 text-[0.48rem] leading-none shadow-sm sm:text-[0.55rem]">{label}</span>
-      <span className={`absolute inset-[7%] z-10 grid gap-[5%] ${tokenGridClass}`}>
-        {teams.map((team) => <span key={team.id} title={team.name} className="grid h-full w-full place-items-center rounded-[35%] border-2 border-ink/35 text-[clamp(0.5rem,1.25vw,1rem)] font-black text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.25)]" style={{ backgroundColor: team.color }}>{team.name.slice(0, 1).toUpperCase()}</span>)}
-      </span>
-    </> : <span>{label}</span>}
+    <span className="absolute left-[5%] top-[5%] z-20 rounded bg-paper/90 px-1 py-0.5 text-[0.48rem] leading-none shadow-sm sm:text-[0.55rem]">{label}</span>
     {shop ? <span className="absolute right-[5%] top-[5%] z-20 grid h-4 w-4 place-items-center rounded-full bg-ink text-[0.48rem] text-saffron">E</span> : null}
   </div>
 }
