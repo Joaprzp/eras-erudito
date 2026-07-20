@@ -42,14 +42,16 @@ function TeamRoom() {
   const [pendingAction, setPendingAction] = useState<string | null>(null)
 
   async function runAction(action: string, operation: () => Promise<unknown>, failureMessage: string) {
-    if (pendingAction) return
+    if (pendingAction) return false
     setError(null)
     setPendingAction(action)
 
     try {
       await operation()
+      return true
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : failureMessage)
+      return false
     } finally {
       setPendingAction(null)
     }
@@ -120,7 +122,12 @@ function TeamRoom() {
 
   async function handleSubmitResponse(payload: string) {
     if (!existingSession) return
-    await runAction('answer', () => submitResponse({ code: roomCode, token: existingSession.token, payload }), 'No pudimos confirmar la respuesta.')
+    const wasSubmitted = await runAction('answer', () => submitResponse({ code: roomCode, token: existingSession.token, payload }), 'No pudimos confirmar la respuesta.')
+    if (!wasSubmitted) return
+
+    const focusedElement = document.activeElement
+    if (focusedElement instanceof HTMLInputElement || focusedElement instanceof HTMLTextAreaElement) focusedElement.blur()
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }))
   }
 
   async function handleRevealResponses() {
