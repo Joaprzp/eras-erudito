@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -13,6 +13,34 @@ export const Route = createFileRoute('/companion/$roomCode')({
   component: CompanionRoom,
 })
 
+const SOUND_FILES = {
+  answersReady: '/sfx/answers-ready.mp3',
+  answersReveal: '/sfx/answers-reveal.mp3',
+  cardReveal: '/sfx/card-reveal.mp3',
+  coinPurchase: '/sfx/coin-purchase.mp3',
+  diceRoll: '/sfx/dice-roll.mp3',
+  gameWon: '/sfx/game-won.mp3',
+  roundTie: '/sfx/round-tie.mp3',
+  roundWon: '/sfx/round-won.mp3',
+  tokenMove: '/sfx/token-move.mp3',
+} as const
+
+type CompanionSound = keyof typeof SOUND_FILES
+
+function useCompanionSound(enabled: boolean) {
+  return useCallback((sound: CompanionSound) => {
+    if (!enabled) return
+
+    const audio = new Audio(SOUND_FILES[sound])
+    audio.volume = sound === 'gameWon' ? 0.28 : 0.2
+    void audio.play().catch(() => undefined)
+  }, [enabled])
+}
+
+function SoundControl({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
+  return <button type="button" aria-pressed={enabled} className={`min-h-9 rounded-full border px-3 py-1.5 text-[0.62rem] font-black uppercase tracking-[0.12em] transition-colors ${enabled ? 'border-mint/60 bg-mint text-ink' : 'border-paper/20 bg-paper/8 text-paper/70'}`} onClick={onClick}>{enabled ? 'Sonido activo' : 'Activar sonido'}</button>
+}
+
 function CompanionRoom() {
   const { roomCode } = Route.useParams()
   const { token } = Route.useSearch()
@@ -22,6 +50,28 @@ function CompanionRoom() {
   )
   const joinUrl = `${window.location.origin}/team/${roomCode}`
   const isActiveGame = lobby?.phase === 'active'
+  const [soundEnabled, setSoundEnabled] = useState(false)
+  const playSound = useCompanionSound(soundEnabled)
+  const previousPhase = useRef<CompanionLobby['phase'] | undefined>(undefined)
+
+  useEffect(() => {
+    const nextPhase = lobby?.phase
+    const wasActive = previousPhase.current === 'active'
+    previousPhase.current = nextPhase
+    if (wasActive && nextPhase === 'finished') playSound('gameWon')
+  }, [lobby?.phase, playSound])
+
+  function toggleSound() {
+    if (soundEnabled) {
+      setSoundEnabled(false)
+      return
+    }
+
+    setSoundEnabled(true)
+    const preview = new Audio(SOUND_FILES.answersReady)
+    preview.volume = 0.18
+    void preview.play().catch(() => undefined)
+  }
 
   return (
     <main className={isActiveGame ? 'min-h-screen bg-ink px-3 py-3 text-paper sm:px-6 sm:py-5 lg:px-8' : 'grid min-h-screen place-items-center bg-ink px-6 text-center text-paper'}>
@@ -34,7 +84,7 @@ function CompanionRoom() {
         {token && lobby === undefined ? <p className="mt-5 text-paper/65">Abriendo la sala…</p> : null}
         {token && lobby === null ? <p className="mt-5 text-coral">No encontramos esta sala.</p> : null}
         {lobby ? (
-          lobby.phase === 'active' ? <GameBoard lobby={lobby} /> : lobby.phase === 'finished' ? <FinishedBoard lobby={lobby} /> : <div className="mt-8 grid gap-6 rounded-3xl border border-paper/20 bg-paper/8 p-6 text-left sm:grid-cols-[1fr_auto]">
+          lobby.phase === 'active' ? <GameBoard lobby={lobby} soundEnabled={soundEnabled} onToggleSound={toggleSound} playSound={playSound} /> : lobby.phase === 'finished' ? <FinishedBoard lobby={lobby} /> : <div className="mt-8 grid gap-6 rounded-3xl border border-paper/20 bg-paper/8 p-6 text-left sm:grid-cols-[1fr_auto]">
             <div>
               <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-saffron">Código para equipos</p>
               <p className="mt-2 font-display text-6xl tracking-[0.1em]">{lobby.code}</p>
@@ -64,7 +114,7 @@ function FinishedBoard({ lobby }: { lobby: CompanionLobby }) {
   return <section className="mt-8 rounded-[2rem] border border-saffron/60 bg-saffron p-8 text-ink"><p className="text-[0.65rem] font-black uppercase tracking-[0.2em] text-coral">Partida terminada</p><h2 className="mt-2 font-display text-6xl tracking-[-0.06em]">{winner?.name ?? 'Tenemos ganador'}</h2><p className="mt-3 text-lg font-semibold">{winner ? `${winner.coins} monedas · $${winner.money}` : 'El anfitrión puede cerrar la sala.'}</p></section>
 }
 
-function GameBoard({ lobby }: { lobby: CompanionLobby }) {
+function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: CompanionLobby; onToggleSound: () => void; playSound: (sound: CompanionSound) => void; soundEnabled: boolean }) {
   const resolvedRoundId = lobby.round?.phase === 'resolved' ? lobby.round.roundId : undefined
   const [dismissedMetricsRoundId, setDismissedMetricsRoundId] = useState<string | undefined>()
   const [exitingMetricsRoundId, setExitingMetricsRoundId] = useState<string | undefined>()
@@ -75,6 +125,74 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
   const resultModalVisible = Boolean(resolvedRoundId && dismissedResultRoundId !== resolvedRoundId)
   const resultModalExiting = exitingResultRoundId === resolvedRoundId
   const cardIsOnTable = Boolean(lobby.round && lobby.roundState && (lobby.round.phase !== 'resolved' || resultModalVisible))
+  const hasSeenRoll = useRef(false)
+  const previousRoll = useRef<number | undefined>(undefined)
+  const hasSeenPosition = useRef(false)
+  const previousPositionKey = useRef('')
+  const hasSeenRound = useRef(false)
+  const previousRound = useRef<{ id?: string; phase?: NonNullable<CompanionLobby['round']>['phase'] }>({})
+  const coinKey = lobby.teams.map((team) => `${team.id}:${team.coins}`).join('|')
+  const hasSeenCoins = useRef(false)
+  const previousCoinKey = useRef('')
+
+  useEffect(() => {
+    const lastRoll = lobby.lastRoll
+    if (!hasSeenRoll.current) {
+      hasSeenRoll.current = true
+      previousRoll.current = lastRoll
+      return
+    }
+    if (lastRoll !== undefined && previousRoll.current !== lastRoll) playSound('diceRoll')
+    previousRoll.current = lastRoll
+  }, [lobby.lastRoll, playSound])
+
+  useEffect(() => {
+    const positionKey = lobby.teams.map((team) => `${team.id}:${team.position}`).join('|')
+    if (!hasSeenPosition.current) {
+      hasSeenPosition.current = true
+      previousPositionKey.current = positionKey
+      return
+    }
+    if (positionKey === previousPositionKey.current) return
+
+    previousPositionKey.current = positionKey
+    const timeout = window.setTimeout(() => playSound('tokenMove'), 180)
+    return () => window.clearTimeout(timeout)
+  }, [lobby.teams, playSound])
+
+  useEffect(() => {
+    const nextRound = lobby.round ? { id: lobby.round.roundId, phase: lobby.round.phase } : {}
+    const previous = previousRound.current
+    previousRound.current = nextRound
+    if (!hasSeenRound.current) {
+      hasSeenRound.current = true
+      return
+    }
+    if (nextRound.phase === 'answering' && previous.phase === 'awaiting_card') {
+      playSound('cardReveal')
+      return
+    }
+    if (!previous.id || previous.id !== nextRound.id) return
+    if (previous.id === nextRound.id && previous.phase === nextRound.phase) return
+
+    if (nextRound.phase === 'ready_to_reveal') playSound('answersReady')
+    if (nextRound.phase === 'revealed') playSound('answersReveal')
+    if (nextRound.phase !== 'resolved') return
+
+    if (previous.phase !== 'revealed') playSound('answersReveal')
+    const timeout = window.setTimeout(() => playSound(lobby.round?.result?.kind === 'tie' ? 'roundTie' : 'roundWon'), previous.phase === 'revealed' ? 0 : 420)
+    return () => window.clearTimeout(timeout)
+  }, [lobby.round, playSound])
+
+  useEffect(() => {
+    if (!hasSeenCoins.current) {
+      hasSeenCoins.current = true
+      previousCoinKey.current = coinKey
+      return
+    }
+    if (coinKey !== previousCoinKey.current) playSound('coinPurchase')
+    previousCoinKey.current = coinKey
+  }, [coinKey, playSound])
 
   useEffect(() => {
     if (!resolvedRoundId || dismissedResultRoundId !== resolvedRoundId) return
@@ -106,7 +224,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Sala {lobby.code} · partida en curso</p>
             <h1 className="mt-1 font-display text-3xl tracking-[-0.05em] lg:text-4xl">La mesa está servida.</h1>
           </div>
-          <DiceRoll value={lobby.lastRoll} />
+          <div className="flex items-center gap-2"><SoundControl enabled={soundEnabled} onClick={onToggleSound} /><DiceRoll value={lobby.lastRoll} /></div>
         </div>
 
         <div className="mt-5 overflow-hidden rounded-[1.65rem] border border-paper/10 bg-ink/35">
