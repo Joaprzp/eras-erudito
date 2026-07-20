@@ -115,6 +115,18 @@
   }
 }
 
+@keyframes companion-card-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(0.7rem) scale(0.98);
+  }
+}
+
 @keyframes companion-step-enter {
   from {
     opacity: 0;
@@ -159,6 +171,10 @@
   animation: companion-card-backdrop 260ms ease-out both;
 }
 
+.companion-card-exit {
+  animation: companion-card-exit 400ms ease-in both;
+}
+
 .companion-step-enter {
   animation: companion-step-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -173,6 +189,7 @@
   .companion-toast-exit,
   .companion-card-enter,
   .companion-card-backdrop,
+  .companion-card-exit,
   .companion-step-enter,
   .companion-step-exit {
     animation: none;

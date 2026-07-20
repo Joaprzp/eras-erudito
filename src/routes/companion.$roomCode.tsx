@@ -65,18 +65,33 @@ function FinishedBoard({ lobby }: { lobby: CompanionLobby }) {
 }
 
 function GameBoard({ lobby }: { lobby: CompanionLobby }) {
-  const cardIsOnTable = Boolean(lobby.round && lobby.roundState && lobby.round.phase !== 'resolved')
   const resolvedRoundId = lobby.round?.phase === 'resolved' ? lobby.round.roundId : undefined
   const [dismissedMetricsRoundId, setDismissedMetricsRoundId] = useState<string | undefined>()
   const [exitingMetricsRoundId, setExitingMetricsRoundId] = useState<string | undefined>()
-  const metricsToastVisible = Boolean(resolvedRoundId && dismissedMetricsRoundId !== resolvedRoundId)
+  const [dismissedResultRoundId, setDismissedResultRoundId] = useState<string | undefined>()
+  const [exitingResultRoundId, setExitingResultRoundId] = useState<string | undefined>()
+  const metricsToastVisible = Boolean(resolvedRoundId && dismissedResultRoundId === resolvedRoundId && dismissedMetricsRoundId !== resolvedRoundId)
   const metricsToastExiting = exitingMetricsRoundId === resolvedRoundId
+  const resultModalVisible = Boolean(resolvedRoundId && dismissedResultRoundId !== resolvedRoundId)
+  const resultModalExiting = exitingResultRoundId === resolvedRoundId
+  const cardIsOnTable = Boolean(lobby.round && lobby.roundState && (lobby.round.phase !== 'resolved' || resultModalVisible))
+
+  useEffect(() => {
+    if (!resolvedRoundId || dismissedResultRoundId !== resolvedRoundId) return
+
+    const exitTimeout = window.setTimeout(() => setExitingMetricsRoundId(resolvedRoundId), 5_400)
+    const dismissTimeout = window.setTimeout(() => setDismissedMetricsRoundId(resolvedRoundId), 5_800)
+    return () => {
+      window.clearTimeout(exitTimeout)
+      window.clearTimeout(dismissTimeout)
+    }
+  }, [dismissedResultRoundId, resolvedRoundId])
 
   useEffect(() => {
     if (!resolvedRoundId) return
 
-    const exitTimeout = window.setTimeout(() => setExitingMetricsRoundId(resolvedRoundId), 5_400)
-    const dismissTimeout = window.setTimeout(() => setDismissedMetricsRoundId(resolvedRoundId), 5_800)
+    const exitTimeout = window.setTimeout(() => setExitingResultRoundId(resolvedRoundId), 5_400)
+    const dismissTimeout = window.setTimeout(() => setDismissedResultRoundId(resolvedRoundId), 5_800)
     return () => {
       window.clearTimeout(exitTimeout)
       window.clearTimeout(dismissTimeout)
@@ -117,7 +132,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
           </div>
         </section>
       </section>
-      {cardIsOnTable && lobby.round && lobby.roundState ? <ActiveCardModal round={lobby.round} state={lobby.roundState} /> : null}
+      {cardIsOnTable && lobby.round && lobby.roundState ? <ActiveCardModal exiting={resultModalExiting} round={lobby.round} state={lobby.roundState} teams={lobby.teams} /> : null}
       {metricsToastVisible ? <MetricsToast key={resolvedRoundId} exiting={metricsToastExiting} teams={lobby.teams} /> : null}
     </>
   )
@@ -162,13 +177,13 @@ function RoundStatus({ lobby }: { lobby: CompanionLobby }) {
     </div>
     <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
       <p className="rounded-full bg-ink px-4 py-2 text-sm font-black text-paper">{displayed.wager ? `$${displayed.wager} en juego` : `tope $${displayed.maxBet}`}</p>
-      {displayed.phase === 'resolved' ? <ResultBanner lobbyRound={round} teams={lobby.teams} /> : null}
     </div>
   </div>
 }
 
-function ActiveCardModal({ round, state }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']> }) {
-  return <div aria-label="Tarjeta en juego" aria-modal="true" className="companion-card-backdrop fixed inset-0 z-50 grid place-items-center bg-ink/80 px-3 py-4 backdrop-blur-md sm:px-8 sm:py-8" role="dialog"><div className="companion-card-enter max-h-full w-full max-w-5xl overflow-y-auto rounded-[2rem]"><QuestionPanel round={round} state={state} /></div></div>
+function ActiveCardModal({ exiting, round, state, teams }: { exiting: boolean; round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']>; teams: CompanionLobby['teams'] }) {
+  const isResult = round.phase === 'resolved'
+  return <div aria-label={isResult ? 'Resultado de la ronda' : 'Tarjeta en juego'} aria-modal="true" className="companion-card-backdrop fixed inset-0 z-50 grid place-items-center bg-ink/80 px-3 py-4 backdrop-blur-md sm:px-8 sm:py-8" role="dialog"><div key={`${round.roundId}:${round.phase}`} className={`${exiting ? 'companion-card-exit' : 'companion-card-enter'} max-h-full w-full max-w-5xl overflow-y-auto rounded-[2rem]`}><QuestionPanel round={round} state={state} teams={teams} /></div></div>
 }
 
 function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean }) {
@@ -252,33 +267,35 @@ function MetricsToast({ teams, exiting }: { teams: CompanionLobby['teams']; exit
   return <aside aria-live="polite" className={`fixed bottom-4 right-4 z-40 w-[min(23rem,calc(100vw-2rem))] rounded-[1.5rem] border border-mint/35 bg-ink/95 p-4 text-left text-paper shadow-[0_18px_55px_rgb(0_0_0_/_0.5)] backdrop-blur-md sm:bottom-6 sm:right-6 ${exiting ? 'companion-toast-exit' : 'companion-toast-enter'}`}><p className="text-[0.58rem] font-black uppercase tracking-[0.2em] text-mint">Ritmo y precisión</p><div className="mt-3 grid grid-cols-2 gap-2">{teams.map((team) => { const averageSeconds = team.answeredCards ? Math.round(team.totalResponseMs / team.answeredCards / 1000) : null; return <div key={team.id} className="min-w-0 rounded-xl bg-paper/8 px-3 py-2"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: team.color }} /><p className="truncate text-sm font-bold">{team.name}</p></div><p className="mt-1 text-xs text-paper/65">{team.correctMarks} aciertos · {averageSeconds === null ? '—' : `${averageSeconds}s`}</p></div> })}</div></aside>
 }
 
-function QuestionPanel({ round, state }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']> }) {
+function QuestionPanel({ round, state, teams }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']>; teams: CompanionLobby['teams'] }) {
   const card = state.card
   const heading = card.category === 'sequence' || card.category === 'association' ? card.instruction : card.category === 'common' ? '¿Qué tienen en común?' : card.prompt
+  const isResult = round.phase === 'resolved'
 
   return <section className="mx-auto max-w-3xl rounded-[2rem] border-[3px] border-ink/15 bg-paper p-5 text-left text-ink shadow-[0_28px_80px_rgb(0_0_0_/_0.5)] sm:p-7 lg:max-w-5xl lg:p-8 xl:p-10">
     <div className="flex items-baseline justify-between gap-4 border-b border-ink/12 pb-4">
-      <p className={`rounded-full px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.18em] ${CARD_CATEGORY_CLASS[card.category]}`}>Tarjeta en mesa · {CATEGORY_LABELS[card.category]}</p>
+      <p className={`rounded-full px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.18em] ${CARD_CATEGORY_CLASS[card.category]}`}>{isResult ? 'Resultado · ' : 'Tarjeta en mesa · '}{CATEGORY_LABELS[card.category]}</p>
       <p className="text-xs font-bold text-ink/60">{state.responseCount}/{state.requiredResponseCount} respuestas</p>
     </div>
     <p className="mt-5 font-display text-3xl leading-[0.95] tracking-[-0.055em] sm:text-4xl lg:text-5xl">{heading}</p>
     {card.category === 'sequence' ? <div className="mt-5 flex flex-wrap gap-2">{card.items.map((item) => <span key={item} className="rounded-full bg-ink/8 px-3 py-1.5 text-sm font-bold sm:px-4 sm:py-2">{item}</span>)}</div> : null}
     {card.category === 'association' ? <div className="mt-5 grid grid-cols-2 gap-2 text-sm font-bold sm:gap-3 sm:text-base">{card.leftItems.map((item) => <span key={item} className="rounded-xl bg-ink/8 px-3 py-2.5">{item}</span>)}{card.rightItems.map((item) => <span key={item} className="rounded-xl bg-ink/8 px-3 py-2.5">{item}</span>)}</div> : null}
     {card.category === 'common' ? <div className="mt-5 flex flex-wrap gap-2">{card.clues.map((clue) => <span key={clue} className="rounded-full bg-ink/8 px-3 py-1.5 text-sm font-bold sm:px-4 sm:py-2">{clue}</span>)}</div> : null}
-    {round.phase === 'revealed' ? <RevealPanel card={card} answers={state.revealedResponses ?? []} /> : <p className="mt-5 text-sm font-semibold text-ink/55">Las respuestas siguen privadas hasta la revelación.</p>}
+    {isResult ? <ResultBanner lobbyRound={round} teams={teams} /> : null}
+    {round.phase === 'revealed' || isResult ? <RevealPanel card={card} answers={state.revealedResponses ?? []} /> : <p className="mt-5 text-sm font-semibold text-ink/55">Las respuestas siguen privadas hasta la revelación.</p>}
   </section>
 }
 
 function ResultBanner({ lobbyRound, teams }: { lobbyRound: NonNullable<CompanionLobby['round']>; teams: CompanionLobby['teams'] }) {
   const result = lobbyRound.result
   if (!result) return null
-  if (result.kind === 'tie') return <p className="rounded-full bg-saffron px-3 py-2 text-sm font-black text-ink">Empate: las apuestas quedan intactas.</p>
+  if (result.kind === 'tie') return <div className="mt-5 rounded-2xl bg-saffron px-4 py-3 text-ink"><p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/60">Resultado</p><p className="mt-1 font-display text-2xl tracking-[-0.04em]">Empate: las apuestas quedan intactas.</p></div>
 
   const winnerNames = result.winnerTeamIds.map((teamId) => teams.find((team) => team.id === teamId)?.name).filter((name): name is string => Boolean(name))
   const winners = winnerNames.length > 1 ? `${winnerNames.slice(0, -1).join(', ')} y ${winnerNames.at(-1)}` : winnerNames[0] ?? 'El equipo ganador'
   const message = winnerNames.length > 1 ? `Ganaron ${winners} · $${result.payout} para cada equipo.` : `Ganó ${winners} · cobra $${result.payout}.`
 
-  return <p className="rounded-full bg-saffron px-3 py-2 text-sm font-black text-ink">{message}</p>
+  return <div className="mt-5 rounded-2xl bg-saffron px-4 py-3 text-ink"><p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/60">Resultado</p><p className="mt-1 font-display text-2xl tracking-[-0.04em]">{message}</p></div>
 }
 
 function RevealPanel({ answers, card }: { answers: Array<{ answer: unknown; teamId: Id<'teams'>; teamName: string }>; card: PublicCard }) {
