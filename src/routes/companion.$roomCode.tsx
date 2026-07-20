@@ -476,8 +476,8 @@ function BoardCell({ category, gridColumn, gridRow, label, shop = false }: { cat
   const categoryClass = category === 'sequence' ? 'bg-coral' : category === 'association' ? 'bg-saffron' : category === 'common' ? 'bg-mint' : category === 'approximation' ? 'bg-sky-400' : 'bg-paper'
 
   return <div className={`relative grid aspect-square min-w-0 place-items-center overflow-hidden rounded-md ${categoryClass} text-[0.5rem] font-black text-ink sm:text-[0.6rem]`} style={{ gridColumn, gridRow }}>
-    <span className="absolute left-[5%] top-[5%] z-20 rounded bg-paper/90 px-1 py-0.5 text-[0.48rem] leading-none shadow-sm sm:text-[0.55rem]">{label}</span>
-    {shop ? <span className="absolute right-[5%] top-[5%] z-20 grid h-4 w-4 place-items-center rounded-full bg-ink text-[0.48rem] text-saffron">E</span> : null}
+    <span className="absolute left-[5%] top-[5%] z-20 rounded bg-paper/90 px-1.5 py-0.5 text-[0.58rem] leading-none shadow-sm sm:text-[0.68rem]">{label}</span>
+    {shop ? <span className="absolute right-[5%] top-[5%] z-20 grid h-5 w-5 place-items-center rounded-full bg-ink text-[0.58rem] text-saffron shadow-sm sm:h-6 sm:w-6 sm:text-[0.68rem]">E</span> : null}
   </div>
 }
 
