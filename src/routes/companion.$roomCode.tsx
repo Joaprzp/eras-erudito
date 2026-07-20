@@ -234,7 +234,7 @@ function TeamTokenLayer({ className, columns, teams }: { className: string; colu
             { transform: `translate(${x}px, ${y}px) scale(0.82)` },
             { transform: 'translate(0, 0) scale(1.08)', offset: 0.78 },
             { transform: 'translate(0, 0) scale(1)' },
-          ], { duration: 720, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+          ], { duration: 1_050, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
         }
       }
       nextRects.set(teamId, nextRect)
