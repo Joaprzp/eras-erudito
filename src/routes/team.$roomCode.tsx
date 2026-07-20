@@ -150,7 +150,7 @@ function TeamRoom() {
 
   return (
     <main className={isActiveGame ? 'min-h-screen bg-paper px-4 py-4 text-ink sm:px-6' : 'grid min-h-screen place-items-center bg-paper px-5 py-8 text-ink'}>
-      <div className="w-full max-w-sm">
+      <div className="mx-auto w-full max-w-sm">
         {!isActiveGame ? <>
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-coral">Dispositivo de equipo</p>
           <h1 className="mt-3 font-display text-6xl tracking-[-0.06em]">Sala {roomCode}</h1>
