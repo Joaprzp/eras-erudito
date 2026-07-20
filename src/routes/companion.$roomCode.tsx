@@ -308,18 +308,42 @@ function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean 
   return (
     <div className={`p-3 transition duration-500 sm:p-5 lg:p-7 ${dimmed ? 'opacity-35 blur-[1px]' : ''}`}>
       <div className="relative">
-        <div className="grid grid-cols-9 gap-1.5 sm:grid-cols-14 lg:gap-2">
-          <BoardCell label="Inicio" />
-          {lobby.board.map((space, index) => (
-            <BoardCell key={index} label={`$${space.maxBet}`} category={space.category} shop={space.isShop} />
-          ))}
-        </div>
+        <BoardGrid className="sm:hidden" columns={9} lobby={lobby} />
+        <BoardGrid className="hidden sm:grid" columns={14} lobby={lobby} />
+        <BoardPathLayer className="sm:hidden" columns={9} spaceCount={lobby.board.length + 1} />
+        <BoardPathLayer className="hidden sm:grid" columns={14} spaceCount={lobby.board.length + 1} />
         <TeamTokenLayer className="sm:hidden" columns={9} teams={lobby.teams} />
         <TeamTokenLayer className="hidden sm:grid" columns={14} teams={lobby.teams} />
       </div>
       {dimmed ? <p className="mt-5 text-center text-[0.58rem] font-black uppercase tracking-[0.22em] text-paper/60">Tablero en pausa · la tarjeta está en juego</p> : null}
     </div>
   )
+}
+
+function BoardGrid({ className, columns, lobby }: { className: string; columns: number; lobby: CompanionLobby }) {
+  const cells = [{ category: undefined, label: 'Inicio', shop: false }, ...lobby.board.map((space) => ({ category: space.category, label: `$${space.maxBet}`, shop: space.isShop }))]
+
+  return <div className={`grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9 grid-rows-6' : 'grid-cols-14 grid-rows-4'} ${className}`}>{cells.map((cell, index) => {
+    const position = boardGridPosition(index, columns)
+    return <BoardCell key={index} category={cell.category} gridColumn={position.column} gridRow={position.row} label={cell.label} shop={cell.shop} />
+  })}</div>
+}
+
+function BoardPathLayer({ className, columns, spaceCount }: { className: string; columns: number; spaceCount: number }) {
+  const rows = Math.ceil(spaceCount / columns)
+
+  return <div aria-hidden="true" className={`pointer-events-none absolute inset-0 z-[5] grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9 grid-rows-6' : 'grid-cols-14 grid-rows-4'} ${className}`}>{Array.from({ length: rows }, (_, row) => {
+    const count = Math.min(columns, spaceCount - row * columns)
+    const movesRight = row % 2 === 0
+    const startColumn = movesRight ? 1 : columns - count + 1
+    return <span key={row} className="relative" style={{ gridColumn: `${startColumn} / span ${count}`, gridRow: row + 1 }}><span className="absolute left-[12%] right-[12%] top-1/2 h-px -translate-y-1/2 bg-ink/40 shadow-[0_1px_0_rgb(255_255_255_/_0.18)]" /><span className={`absolute top-1/2 -translate-y-1/2 rounded-full bg-paper/75 px-1 font-black leading-none text-ink/65 shadow-sm ${movesRight ? 'right-[8%]' : 'left-[8%]'}`}>{movesRight ? '→' : '←'}</span></span>
+  })}</div>
+}
+
+function boardGridPosition(position: number, columns: number) {
+  const row = Math.floor(position / columns)
+  const offset = position % columns
+  return { column: row % 2 === 0 ? offset + 1 : columns - offset, row: row + 1 }
 }
 
 function TeamTokenLayer({ className, columns, teams }: { className: string; columns: number; teams: CompanionLobby['teams'] }) {
@@ -363,7 +387,8 @@ function TeamTokenLayer({ className, columns, teams }: { className: string; colu
   return <div ref={layerRef} className={`pointer-events-none absolute inset-0 z-10 grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9 grid-rows-6' : 'grid-cols-14 grid-rows-4'} ${className}`}>
     {Array.from(teamsByPosition.entries()).flatMap(([position, teamsAtPosition]) => teamsAtPosition.map((team, index) => {
       const slot = tokenSlot(index, teamsAtPosition.length)
-      return <span key={team.id} data-team-token={team.id} className="relative" style={{ gridColumn: position % columns + 1, gridRow: Math.floor(position / columns) + 1 }}><span title={team.name} className="absolute grid place-items-center rounded-[35%] border-2 border-ink/35 text-[clamp(0.5rem,1.25vw,1rem)] font-black text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.25)]" style={{ backgroundColor: team.color, height: `${slot.height}%`, left: `${slot.left}%`, top: `${slot.top}%`, width: `${slot.width}%` }}>{team.name.slice(0, 1).toUpperCase()}</span></span>
+      const gridPosition = boardGridPosition(position, columns)
+      return <span key={team.id} data-team-token={team.id} className="relative" style={{ gridColumn: gridPosition.column, gridRow: gridPosition.row }}><span title={team.name} className="absolute grid place-items-center rounded-[35%] border-2 border-ink/35 text-[clamp(0.5rem,1.25vw,1rem)] font-black text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.25)]" style={{ backgroundColor: team.color, height: `${slot.height}%`, left: `${slot.left}%`, top: `${slot.top}%`, width: `${slot.width}%` }}>{team.name.slice(0, 1).toUpperCase()}</span></span>
     }))}
   </div>
 }
@@ -448,10 +473,10 @@ function roundMessage(round: NonNullable<CompanionLobby['round']>, teams: Compan
   return 'Tarjeta revelada.'
 }
 
-function BoardCell({ category, label, shop = false }: { category?: string; label: string; shop?: boolean }) {
+function BoardCell({ category, gridColumn, gridRow, label, shop = false }: { category?: string; gridColumn?: number; gridRow?: number; label: string; shop?: boolean }) {
   const categoryClass = category === 'sequence' ? 'bg-coral' : category === 'association' ? 'bg-saffron' : category === 'common' ? 'bg-mint' : category === 'approximation' ? 'bg-sky-400' : 'bg-paper'
 
-  return <div className={`relative grid aspect-square min-w-0 place-items-center overflow-hidden rounded-md ${categoryClass} text-[0.5rem] font-black text-ink sm:text-[0.6rem]`}>
+  return <div className={`relative grid aspect-square min-w-0 place-items-center overflow-hidden rounded-md ${categoryClass} text-[0.5rem] font-black text-ink sm:text-[0.6rem]`} style={{ gridColumn, gridRow }}>
     <span className="absolute left-[5%] top-[5%] z-20 rounded bg-paper/90 px-1 py-0.5 text-[0.48rem] leading-none shadow-sm sm:text-[0.55rem]">{label}</span>
     {shop ? <span className="absolute right-[5%] top-[5%] z-20 grid h-4 w-4 place-items-center rounded-full bg-ink text-[0.48rem] text-saffron">E</span> : null}
   </div>
