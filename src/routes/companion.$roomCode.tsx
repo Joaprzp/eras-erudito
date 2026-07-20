@@ -133,7 +133,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
         </section>
       </section>
       {cardIsOnTable && lobby.round && lobby.roundState ? <ActiveCardModal exiting={resultModalExiting} round={lobby.round} state={lobby.roundState} teams={lobby.teams} /> : null}
-      {metricsToastVisible ? <MetricsToast key={resolvedRoundId} exiting={metricsToastExiting} teams={lobby.teams} /> : null}
+      {metricsToastVisible && lobby.round ? <MetricsToast key={resolvedRoundId} category={lobby.round.category} exiting={metricsToastExiting} teams={lobby.teams} /> : null}
     </>
   )
 }
@@ -263,8 +263,12 @@ function tokenSlot(index: number, count: number) {
   return slots[index] ?? slots[0]
 }
 
-function MetricsToast({ teams, exiting }: { teams: CompanionLobby['teams']; exiting: boolean }) {
-  return <aside aria-live="polite" className={`fixed bottom-4 right-4 z-40 w-[min(23rem,calc(100vw-2rem))] rounded-[1.5rem] border border-mint/35 bg-ink/95 p-4 text-left text-paper shadow-[0_18px_55px_rgb(0_0_0_/_0.5)] backdrop-blur-md sm:bottom-6 sm:right-6 ${exiting ? 'companion-toast-exit' : 'companion-toast-enter'}`}><p className="text-[0.58rem] font-black uppercase tracking-[0.2em] text-mint">Ritmo y precisión</p><div className="mt-3 grid grid-cols-2 gap-2">{teams.map((team) => { const averageSeconds = team.answeredCards ? Math.round(team.totalResponseMs / team.answeredCards / 1000) : null; return <div key={team.id} className="min-w-0 rounded-xl bg-paper/8 px-3 py-2"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: team.color }} /><p className="truncate text-sm font-bold">{team.name}</p></div><p className="mt-1 text-xs text-paper/65">{team.correctMarks} aciertos · {averageSeconds === null ? '—' : `${averageSeconds}s`}</p></div> })}</div></aside>
+function MetricsToast({ category, teams, exiting }: { category: keyof typeof CATEGORY_LABELS; teams: CompanionLobby['teams']; exiting: boolean }) {
+  const categoryAttempts = teams.reduce((total, team) => total + team.categoryStats[category].attempts, 0)
+  const categoryWins = teams.reduce((total, team) => total + team.categoryStats[category].wins, 0)
+  const tableEffectiveness = categoryAttempts ? Math.round(categoryWins / categoryAttempts * 100) : 0
+
+  return <aside aria-live="polite" className={`fixed bottom-4 right-4 z-40 w-[min(26rem,calc(100vw-2rem))] rounded-[1.5rem] border border-mint/35 bg-ink/95 p-4 text-left text-paper shadow-[0_18px_55px_rgb(0_0_0_/_0.5)] backdrop-blur-md sm:bottom-6 sm:right-6 ${exiting ? 'companion-toast-exit' : 'companion-toast-enter'}`}><div className="flex items-baseline justify-between gap-3"><div><p className="text-[0.58rem] font-black uppercase tracking-[0.2em] text-mint">Ritmo y precisión</p><p className="mt-1 font-display text-xl tracking-[-0.04em]">{CATEGORY_LABELS[category]}</p></div><p className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">Mesa · {tableEffectiveness}%</p></div><p className="mt-3 text-xs font-semibold text-paper/65">Efectividad: rondas ganadas sobre respondidas en esta categoría.</p><div className="mt-3 grid grid-cols-2 gap-2">{teams.map((team) => { const stats = team.categoryStats[category]; const effectiveness = stats.attempts ? Math.round(stats.wins / stats.attempts * 100) : null; const averageSeconds = stats.attempts ? Math.round(stats.totalResponseMs / stats.attempts / 1000) : null; return <div key={team.id} className="min-w-0 rounded-xl bg-paper/8 px-3 py-2"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: team.color }} /><p className="truncate text-sm font-bold">{team.name}</p></div><div className="mt-1.5 flex items-baseline justify-between gap-2"><p className="text-sm font-black text-saffron">{effectiveness === null ? '—' : `${effectiveness}%`}</p><p className="text-xs text-paper/65">{stats.wins}/{stats.attempts} · {averageSeconds === null ? '—' : `${averageSeconds}s`}</p></div></div> })}</div></aside>
 }
 
 function QuestionPanel({ round, state, teams }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']>; teams: CompanionLobby['teams'] }) {
@@ -359,7 +363,7 @@ type CompanionLobby = {
     revealedResponses?: Array<{ answer: unknown; teamId: Id<'teams'>; teamName: string }>
     submittedTeamIds: Id<'teams'>[]
   } | null
-  teams: Array<{ answeredCards: number; coins: number; color: string; correctMarks: number; id: Id<'teams'>; isHost: boolean; joinIndex: number; money: number; name: string; position: number; status: 'connected' | 'eliminated'; totalResponseMs: number }>
+  teams: Array<{ answeredCards: number; categoryStats: Record<keyof typeof CATEGORY_LABELS, { attempts: number; wins: number; totalResponseMs: number }>; coins: number; color: string; correctMarks: number; id: Id<'teams'>; isHost: boolean; joinIndex: number; money: number; name: string; position: number; status: 'connected' | 'eliminated'; totalResponseMs: number }>
   turnTeamId?: Id<'teams'>
   winnerTeamId?: Id<'teams'>
 }

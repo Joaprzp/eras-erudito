@@ -8,6 +8,45 @@ import { cardDeck, type CardCategory, type QuestionCard } from './cardDeck'
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const CATEGORIES = ['sequence', 'association', 'common', 'approximation'] as const
 
+type CategoryStat = { attempts: number; wins: number; totalResponseMs: number }
+type CategoryStats = Record<CardCategory, CategoryStat>
+
+function emptyCategoryStats(): CategoryStats {
+  return {
+    sequence: { attempts: 0, wins: 0, totalResponseMs: 0 },
+    association: { attempts: 0, wins: 0, totalResponseMs: 0 },
+    common: { attempts: 0, wins: 0, totalResponseMs: 0 },
+    approximation: { attempts: 0, wins: 0, totalResponseMs: 0 },
+  }
+}
+
+function normalizedCategoryStats(stats: CategoryStats | undefined): CategoryStats {
+  return stats ?? emptyCategoryStats()
+}
+
+function categoryStatsWithAttempt(stats: CategoryStats | undefined, category: CardCategory, responseMs: number): CategoryStats {
+  const normalized = normalizedCategoryStats(stats)
+  return {
+    ...normalized,
+    [category]: {
+      ...normalized[category],
+      attempts: normalized[category].attempts + 1,
+      totalResponseMs: normalized[category].totalResponseMs + responseMs,
+    },
+  }
+}
+
+function categoryStatsWithResult(stats: CategoryStats | undefined, category: CardCategory, won: boolean): CategoryStats {
+  const normalized = normalizedCategoryStats(stats)
+  return {
+    ...normalized,
+    [category]: {
+      ...normalized[category],
+      wins: normalized[category].wins + (won ? 1 : 0),
+    },
+  }
+}
+
 export const create = mutation({
   args: {},
   handler: async (ctx) => {
@@ -94,8 +133,9 @@ export const companionLobby = query({
       winnerTeamId: room.winnerTeamId,
       teams: teams
         .sort((left, right) => left.joinIndex - right.joinIndex)
-        .map(({ _id, answeredCards, coins, color, correctMarks, isHost, joinIndex, money, name, position, status, totalResponseMs }) => ({
+        .map(({ _id, answeredCards, categoryStats, coins, color, correctMarks, isHost, joinIndex, money, name, position, status, totalResponseMs }) => ({
           answeredCards: answeredCards ?? 0,
+          categoryStats: normalizedCategoryStats(categoryStats),
           coins: coins ?? 0,
           id: _id,
           color,
@@ -199,6 +239,7 @@ export const start = mutation({
           answeredCards: 0,
           correctMarks: 0,
           totalResponseMs: 0,
+          categoryStats: emptyCategoryStats(),
         }),
       ),
     )
@@ -381,6 +422,7 @@ export const submitResponse = mutation({
     await ctx.db.patch(team._id, {
       answeredCards: (team.answeredCards ?? 0) + 1,
       totalResponseMs: (team.totalResponseMs ?? 0) + responseMs,
+      categoryStats: categoryStatsWithAttempt(team.categoryStats, round.category, responseMs),
     })
 
     const responses = await ctx.db
@@ -826,11 +868,10 @@ async function settleRound(
   const share = result.winnerTeamIds.length ? Math.floor(pot / result.winnerTeamIds.length) : 0
   const remainder = result.winnerTeamIds.length ? pot - share * result.winnerTeamIds.length : room.approximationRemainder ?? 0
 
-  if (shouldCollect) {
-    await Promise.all(participants.map((participant) => ctx.db.patch(participant._id, {
-      money: (participant.money ?? 0) - wager + (result.winnerTeamIds.includes(participant._id) ? share : 0),
-    })))
-  }
+  await Promise.all(participants.map((participant) => ctx.db.patch(participant._id, {
+    ...(shouldCollect ? { money: (participant.money ?? 0) - wager + (result.winnerTeamIds.includes(participant._id) ? share : 0) } : {}),
+    categoryStats: categoryStatsWithResult(participant.categoryStats, round.category, result.winnerTeamIds.includes(participant._id)),
+  })))
 
   const challengerWon = result.winnerTeamIds.length === 1 && result.winnerTeamIds[0] === challenger._id
   const nextStreak = challengerWon ? (challenger.turnWins ?? 0) + 1 : 0

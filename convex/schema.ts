@@ -63,6 +63,12 @@ export default defineSchema({
     answeredCards: v.optional(v.number()),
     correctMarks: v.optional(v.number()),
     totalResponseMs: v.optional(v.number()),
+    categoryStats: v.optional(v.object({
+      sequence: v.object({ attempts: v.number(), wins: v.number(), totalResponseMs: v.number() }),
+      association: v.object({ attempts: v.number(), wins: v.number(), totalResponseMs: v.number() }),
+      common: v.object({ attempts: v.number(), wins: v.number(), totalResponseMs: v.number() }),
+      approximation: v.object({ attempts: v.number(), wins: v.number(), totalResponseMs: v.number() }),
+    })),
   })
     .index('by_room', ['roomId'])
     .index('by_room_token', ['roomId', 'token']),
