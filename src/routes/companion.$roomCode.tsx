@@ -310,8 +310,8 @@ function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean 
       <div className="relative">
         <BoardGrid className="sm:hidden" columns={9} lobby={lobby} />
         <BoardGrid className="hidden sm:grid" columns={14} lobby={lobby} />
-        <BoardPathLayer className="sm:hidden" columns={9} spaceCount={lobby.board.length + 1} />
-        <BoardPathLayer className="hidden sm:grid" columns={14} spaceCount={lobby.board.length + 1} />
+        <BoardDirectionLayer className="sm:hidden" columns={9} spaceCount={lobby.board.length + 1} />
+        <BoardDirectionLayer className="hidden sm:grid" columns={14} spaceCount={lobby.board.length + 1} />
         <TeamTokenLayer className="sm:hidden" columns={9} teams={lobby.teams} />
         <TeamTokenLayer className="hidden sm:grid" columns={14} teams={lobby.teams} />
       </div>
@@ -329,14 +329,13 @@ function BoardGrid({ className, columns, lobby }: { className: string; columns: 
   })}</div>
 }
 
-function BoardPathLayer({ className, columns, spaceCount }: { className: string; columns: number; spaceCount: number }) {
+function BoardDirectionLayer({ className, columns, spaceCount }: { className: string; columns: number; spaceCount: number }) {
   const rows = Math.ceil(spaceCount / columns)
 
   return <div aria-hidden="true" className={`pointer-events-none absolute inset-0 z-[5] grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9 grid-rows-6' : 'grid-cols-14 grid-rows-4'} ${className}`}>{Array.from({ length: rows }, (_, row) => {
-    const count = Math.min(columns, spaceCount - row * columns)
     const movesRight = row % 2 === 0
-    const startColumn = movesRight ? 1 : columns - count + 1
-    return <span key={row} className="relative" style={{ gridColumn: `${startColumn} / span ${count}`, gridRow: row + 1 }}><span className="absolute left-[12%] right-[12%] top-1/2 h-px -translate-y-1/2 bg-ink/40 shadow-[0_1px_0_rgb(255_255_255_/_0.18)]" /><span className={`absolute top-1/2 -translate-y-1/2 rounded-full bg-paper/75 px-1 font-black leading-none text-ink/65 shadow-sm ${movesRight ? 'right-[8%]' : 'left-[8%]'}`}>{movesRight ? '→' : '←'}</span></span>
+    const entryColumn = movesRight ? 1 : columns
+    return <span key={row} className="relative" style={{ gridColumn: entryColumn, gridRow: row + 1 }}><span className={`absolute top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-paper/25 bg-ink/90 text-sm font-black text-saffron shadow-[0_2px_8px_rgb(0_0_0_/_0.28)] ${movesRight ? '-left-3' : '-right-3'}`}>{movesRight ? '→' : '←'}</span></span>
   })}</div>
 }
 
