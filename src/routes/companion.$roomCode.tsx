@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -98,18 +98,7 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
           <BoardStrip lobby={lobby} dimmed={cardIsOnTable} />
         </div>
 
-        {lobby.round && !cardIsOnTable ? (
-          <div className="mt-5 rounded-2xl bg-paper p-4 text-ink sm:flex sm:items-center sm:justify-between sm:gap-6">
-            <div>
-              <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-coral">Ronda actual · {lobby.round.phase === 'choose_category' ? 'Inicio' : CATEGORY_LABELS[lobby.round.category]}</p>
-              <p className="mt-1 font-display text-2xl tracking-[-0.05em] sm:text-3xl">{roundMessage(lobby)}</p>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
-              <p className="rounded-full bg-ink px-4 py-2 text-sm font-black text-paper">{lobby.round.wager ? `$${lobby.round.wager} en juego` : `tope $${lobby.round.maxBet}`}</p>
-              {lobby.round.phase === 'resolved' ? <ResultBanner lobbyRound={lobby.round} teams={lobby.teams} /> : null}
-            </div>
-          </div>
-        ) : null}
+        {lobby.round && !cardIsOnTable ? <RoundStatus lobby={lobby} /> : null}
         <section className="mt-5 rounded-[1.5rem] border border-paper/10 bg-ink/25 p-3 sm:p-4">
           <p className="px-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-paper/55">Equipos</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -136,6 +125,46 @@ function GameBoard({ lobby }: { lobby: CompanionLobby }) {
 
 function DiceRoll({ value }: { value?: number }) {
   return <p aria-live="polite" className="flex items-center gap-2 rounded-full bg-saffron px-3 py-1.5 text-sm font-black text-ink"><span className="text-ink/70">Tirada</span><span key={value ?? 'empty'} className="companion-dice-roll grid h-7 min-w-7 place-items-center rounded-lg bg-ink px-1 text-paper shadow-[0_2px_0_rgb(0_0_0_/_0.22)]">{value ?? '—'}</span></p>
+}
+
+function RoundStatus({ lobby }: { lobby: CompanionLobby }) {
+  const round = lobby.round!
+  const next = useMemo(() => ({
+    category: round.phase === 'choose_category' ? 'Inicio' : CATEGORY_LABELS[round.category],
+    key: [round.roundId, round.phase, round.targetId, round.wager, round.result?.winnerTeamIds.join(',')].join(':'),
+    message: roundMessage(round, lobby.teams),
+    phase: round.phase,
+    wager: round.wager,
+    maxBet: round.maxBet,
+  }), [lobby.teams, round])
+  const [displayed, setDisplayed] = useState(next)
+  const [isLeaving, setIsLeaving] = useState(false)
+
+  useEffect(() => {
+    if (next.key === displayed.key) return
+
+    const frame = window.requestAnimationFrame(() => setIsLeaving(true))
+    const replaceTimeout = window.setTimeout(() => {
+      setDisplayed(next)
+      setIsLeaving(false)
+    }, 180)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(replaceTimeout)
+    }
+  }, [displayed.key, next])
+
+  return <div aria-live="polite" className={`mt-5 rounded-2xl bg-paper p-4 text-ink sm:flex sm:items-center sm:justify-between sm:gap-6 ${isLeaving ? 'companion-step-exit' : 'companion-step-enter'}`}>
+    <div>
+      <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-coral">Ronda actual · {displayed.category}</p>
+      <p className="mt-1 font-display text-2xl tracking-[-0.05em] sm:text-3xl">{displayed.message}</p>
+    </div>
+    <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
+      <p className="rounded-full bg-ink px-4 py-2 text-sm font-black text-paper">{displayed.wager ? `$${displayed.wager} en juego` : `tope $${displayed.maxBet}`}</p>
+      {displayed.phase === 'resolved' ? <ResultBanner lobbyRound={round} teams={lobby.teams} /> : null}
+    </div>
+  </div>
 }
 
 function ActiveCardModal({ round, state }: { round: NonNullable<CompanionLobby['round']>; state: NonNullable<CompanionLobby['roundState']> }) {
@@ -266,12 +295,9 @@ function formatAnswer(answer: unknown) {
   return String(answer)
 }
 
-function roundMessage(lobby: CompanionLobby) {
-  const round = lobby.round
-  if (!round) return ''
-
-  const challenger = lobby.teams.find((team) => team.id === round.challengerId)?.name ?? 'El retador'
-  const target = round.targetId ? lobby.teams.find((team) => team.id === round.targetId)?.name : undefined
+function roundMessage(round: NonNullable<CompanionLobby['round']>, teams: CompanionLobby['teams']) {
+  const challenger = teams.find((team) => team.id === round.challengerId)?.name ?? 'El retador'
+  const target = round.targetId ? teams.find((team) => team.id === round.targetId)?.name : undefined
 
   if (round.phase === 'choose_rival') return `${challenger} elige rival.`
   if (round.phase === 'choose_category') return `${challenger} elige una categoría de Inicio.`
