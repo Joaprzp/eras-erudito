@@ -2,10 +2,13 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CanvasTexture,
+  Color,
   MathUtils,
+  Object3D,
   SRGBColorSpace,
   Vector3,
   type Group,
+  type InstancedMesh,
   type OrthographicCamera,
 } from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
@@ -35,6 +38,7 @@ type Board3DProps = {
   dimmed: boolean
   rollId?: string
   teams: BoardTeam[]
+  winnerTeamId?: string
 }
 
 type Board3DState = {
@@ -54,34 +58,34 @@ const CATEGORY_COLORS: Record<BoardCategory, string> = {
 const INK = '#21160f'
 const PAPER = '#f7efd9'
 
-export function Board3D({ activeTeamId, board, dice, dimmed, rollId, teams }: Board3DProps) {
+export function Board3D({ activeTeamId, board, dice, dimmed, rollId, teams, winnerTeamId }: Board3DProps) {
   const [contextLost, setContextLost] = useState(false)
 
   return (
     <div className={`relative transition duration-500 ${dimmed ? 'opacity-35 blur-[1px]' : ''}`}>
-      <BoardSceneErrorBoundary fallback={<BoardFallback board={board} teams={teams} />}>
+      <BoardSceneErrorBoundary fallback={<BoardFallback board={board} teams={teams} winnerTeamId={winnerTeamId} />}>
         <div className="h-[24rem] w-full sm:h-[27rem] lg:h-[32rem]">
           <Canvas
             aria-hidden="true"
             dpr={[1, 1.5]}
-            fallback={<BoardFallback board={board} teams={teams} />}
+            fallback={<BoardFallback board={board} teams={teams} winnerTeamId={winnerTeamId} />}
             flat
             frameloop="demand"
             gl={{ alpha: false, antialias: true, powerPreference: 'default' }}
             shadows="basic"
           >
-            <BoardScene activeTeamId={activeTeamId} board={board} dice={dice} rollId={rollId} teams={teams} onContextLost={setContextLost} />
+            <BoardScene activeTeamId={activeTeamId} board={board} dice={dice} rollId={rollId} teams={teams} winnerTeamId={winnerTeamId} onContextLost={setContextLost} />
           </Canvas>
         </div>
       </BoardSceneErrorBoundary>
-      {contextLost ? <div className="absolute inset-0 grid place-items-center bg-ink/85 p-6"><BoardFallback board={board} teams={teams} message="La vista 3D está recuperándose." /></div> : null}
-      <BoardAccessibleState board={board} teams={teams} />
+      {contextLost ? <div className="absolute inset-0 grid place-items-center bg-ink/85 p-6"><BoardFallback board={board} teams={teams} winnerTeamId={winnerTeamId} message="La vista 3D está recuperándose." /></div> : null}
+      <BoardAccessibleState board={board} teams={teams} winnerTeamId={winnerTeamId} />
       {dimmed ? <p className="pb-4 text-center text-[0.58rem] font-black uppercase tracking-[0.22em] text-paper/60">Tablero en pausa · la tarjeta está en juego</p> : null}
     </div>
   )
 }
 
-function BoardScene({ activeTeamId, board, dice, onContextLost, rollId, teams }: { activeTeamId?: string; board: BoardSpace[]; dice?: { first: number; second: number }; onContextLost: (lost: boolean) => void; rollId?: string; teams: BoardTeam[] }) {
+function BoardScene({ activeTeamId, board, dice, onContextLost, rollId, teams, winnerTeamId }: { activeTeamId?: string; board: BoardSpace[]; dice?: { first: number; second: number }; onContextLost: (lost: boolean) => void; rollId?: string; teams: BoardTeam[]; winnerTeamId?: string }) {
   const { size } = useThree()
   const columns = size.width < 640 ? 9 : 14
   const layout = useMemo(() => createBoardLayout(columns), [columns])
@@ -110,6 +114,7 @@ function BoardScene({ activeTeamId, board, dice, onContextLost, rollId, teams }:
         shadow-camera-right={11}
         shadow-camera-top={7}
       />
+      {winnerTeamId ? <pointLight color="#f2bd2e" intensity={8} position={[0, 5, 1]} distance={18} decay={1.5} /> : null}
       <CameraRig columns={columns} rows={layout.rows} />
       <ContextMonitor onChange={onContextLost} />
 
@@ -117,6 +122,7 @@ function BoardScene({ activeTeamId, board, dice, onContextLost, rollId, teams }:
         <TableSurface columns={columns} rows={layout.rows} />
         <PathLinks positions={layout.positions} />
         <DicePair dice={dice} reducedMotion={reducedMotion} rollId={rollId} rows={layout.rows} />
+        {winnerTeamId ? <VictoryConfetti columns={columns} reducedMotion={reducedMotion} rows={layout.rows} winnerTeamId={winnerTeamId} /> : null}
         {layout.positions.map((position, index) => (
           <BoardTile
             key={index}
@@ -137,6 +143,7 @@ function BoardScene({ activeTeamId, board, dice, onContextLost, rollId, teams }:
               slotIndex={colocated.findIndex((item) => item.id === team.id)}
               team={team}
               variant={team.joinIndex % 4}
+              winner={team.id === winnerTeamId}
             />
           )
         })}
@@ -306,6 +313,63 @@ function Die({ direction, position, reducedMotion, rollId, value }: { direction:
   )
 }
 
+function VictoryConfetti({ columns, reducedMotion, rows, winnerTeamId }: { columns: number; reducedMotion: boolean; rows: number; winnerTeamId: string }) {
+  const mesh = useRef<InstancedMesh>(null)
+  const { invalidate } = useThree()
+  const elapsed = useRef(0)
+  const dummy = useMemo(() => new Object3D(), [])
+  const pieces = useMemo(() => Array.from({ length: 48 }, (_, index) => ({
+    color: ['#f2bd2e', '#e85f4a', '#63c5a0', '#f7efd9'][index % 4],
+    offset: index * 0.37 % 5.8,
+    phase: index * 1.73,
+    speed: 1.45 + index % 7 * 0.11,
+    x: ((index * 47) % 101) / 100 - 0.5,
+    z: ((index * 67) % 97) / 96 - 0.5,
+  })), [])
+
+  useEffect(() => {
+    if (!mesh.current) return
+    pieces.forEach((piece, index) => mesh.current?.setColorAt(index, new Color(piece.color)))
+    if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true
+  }, [pieces])
+
+  useEffect(() => {
+    elapsed.current = 0
+    invalidate()
+  }, [invalidate, winnerTeamId])
+
+  useFrame((_, delta) => {
+    if (!mesh.current || reducedMotion || elapsed.current > 6.2) return
+    elapsed.current += Math.min(delta, 0.05)
+    const boardWidth = columns * (TILE_WIDTH + TILE_GAP)
+    const boardDepth = rows * (TILE_DEPTH + TILE_GAP)
+
+    pieces.forEach((piece, index) => {
+      const fall = (elapsed.current * piece.speed + piece.offset) % 6.2
+      dummy.position.set(
+        piece.x * boardWidth + Math.sin(elapsed.current * 1.8 + piece.phase) * 0.22,
+        5.9 - fall,
+        piece.z * boardDepth + Math.cos(elapsed.current * 1.3 + piece.phase) * 0.14,
+      )
+      dummy.rotation.set(elapsed.current * piece.speed, piece.phase + elapsed.current * 2.2, elapsed.current * 1.7)
+      dummy.scale.setScalar(elapsed.current > 5.8 ? Math.max(0, (6.2 - elapsed.current) / 0.4) : 1)
+      dummy.updateMatrix()
+      mesh.current?.setMatrixAt(index, dummy.matrix)
+    })
+    mesh.current.instanceMatrix.needsUpdate = true
+    invalidate()
+  })
+
+  if (reducedMotion) return null
+
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, pieces.length]} frustumCulled={false}>
+      <boxGeometry args={[0.09, 0.025, 0.16]} />
+      <meshBasicMaterial toneMapped={false} vertexColors />
+    </instancedMesh>
+  )
+}
+
 function PathLinks({ positions }: { positions: Vector3[] }) {
   return (
     <group>
@@ -389,11 +453,13 @@ function ShopMarker() {
   )
 }
 
-function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, variant }: { active: boolean; layout: Vector3[]; reducedMotion: boolean; slotCount: number; slotIndex: number; team: BoardTeam; variant: number }) {
+function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, variant, winner }: { active: boolean; layout: Vector3[]; reducedMotion: boolean; slotCount: number; slotIndex: number; team: BoardTeam; variant: number; winner: boolean }) {
   const pawn = useRef<Group>(null)
   const { invalidate } = useThree()
   const logicalPosition = useRef(team.position)
-  const animation = useRef<{ elapsed: number; from: number; steps: number } | null>(null)
+  const animation = useRef<{ crossedStart: boolean; elapsed: number; from: number; steps: number } | null>(null)
+  const ceremonyElapsed = useRef(0)
+  const passageElapsed = useRef<number | null>(null)
   const slotOffset = pawnSlot(slotIndex, slotCount)
   const monogram = useMemo(() => createMonogramTexture(team.name), [team.name])
 
@@ -410,9 +476,15 @@ function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, v
       invalidate()
       return
     }
-    animation.current = { elapsed: 0, from: previous, steps }
+    animation.current = { crossedStart: previous + steps >= TOTAL_SPACES, elapsed: 0, from: previous, steps }
     invalidate()
   }, [invalidate, layout, reducedMotion, slotOffset.x, slotOffset.z, team.position])
+
+  useEffect(() => {
+    if (!winner) return
+    ceremonyElapsed.current = 0
+    invalidate()
+  }, [invalidate, winner])
 
   useFrame((_, delta) => {
     if (!pawn.current || !animation.current) return
@@ -439,8 +511,44 @@ function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, v
       const target = layout[team.position]
       pawn.current.position.set(target.x + slotOffset.x, 0.38, target.z + slotOffset.z)
       pawn.current.rotation.y = 0
-      pawn.current.scale.set(1, 1, 1)
+      pawn.current.scale.setScalar(1)
+      if (motion.crossedStart) passageElapsed.current = 0
       animation.current = null
+      if (motion.crossedStart) invalidate()
+      return
+    }
+    invalidate()
+  })
+
+  useFrame((_, delta) => {
+    if (!pawn.current || passageElapsed.current === null || winner || animation.current) return
+    passageElapsed.current += Math.min(delta, 0.05)
+    const progress = Math.min(passageElapsed.current / 1.2, 1)
+    const glow = Math.sin(progress * Math.PI)
+    pawn.current.position.y = 0.38 + glow * 0.28
+    pawn.current.scale.setScalar(1 + glow * 0.3)
+    if (progress >= 1) {
+      pawn.current.position.y = 0.38
+      pawn.current.scale.setScalar(1)
+      passageElapsed.current = null
+      return
+    }
+    invalidate()
+  })
+
+  useFrame((_, delta) => {
+    if (!pawn.current || !winner || reducedMotion || animation.current || ceremonyElapsed.current > 5.8) return
+    ceremonyElapsed.current += Math.min(delta, 0.05)
+    const target = layout[team.position]
+    const settle = Math.min(ceremonyElapsed.current / 0.7, 1)
+    const pulse = Math.sin(ceremonyElapsed.current * Math.PI * 3) * 0.07 * (1 - ceremonyElapsed.current / 5.8)
+    pawn.current.position.set(target.x + slotOffset.x, 0.38 + Math.abs(Math.sin(ceremonyElapsed.current * 3.2)) * 0.18 * (1 - settle * 0.45), target.z + slotOffset.z)
+    pawn.current.rotation.y += delta * (3.4 - settle * 1.8)
+    pawn.current.scale.setScalar(1.12 + pulse)
+    if (ceremonyElapsed.current >= 5.8) {
+      pawn.current.position.set(target.x + slotOffset.x, 0.38, target.z + slotOffset.z)
+      pawn.current.rotation.y = 0
+      pawn.current.scale.setScalar(1.12)
       return
     }
     invalidate()
@@ -449,7 +557,8 @@ function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, v
   const initial = layout[team.position]
   return (
     <group ref={pawn} position={[initial.x + slotOffset.x, 0.38, initial.z + slotOffset.z]}>
-      {active ? <mesh position={[0, -0.225, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.31, 0.025, 8, 28]} /><meshBasicMaterial color="#f2bd2e" toneMapped={false} /></mesh> : null}
+      {active || winner ? <mesh position={[0, -0.225, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[winner ? 0.36 : 0.31, winner ? 0.045 : 0.025, 8, 28]} /><meshBasicMaterial color="#f2bd2e" toneMapped={false} /></mesh> : null}
+      {winner ? <><mesh position={[0, -0.22, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.48, 0.018, 8, 32]} /><meshBasicMaterial color={PAPER} transparent opacity={0.78} toneMapped={false} /></mesh><pointLight color="#f2bd2e" distance={3.5} intensity={5} position={[0, 1, 0]} /></> : null}
       <mesh position={[0.1, -0.19, 0.11]} receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[0.2, 20]} />
         <meshBasicMaterial color="#140d09" transparent opacity={0.24} depthWrite={false} />
@@ -470,22 +579,55 @@ function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, v
         <cylinderGeometry args={[0.25, 0.25, 0.08, variant === 1 ? 4 : variant === 2 ? 6 : variant === 3 ? 3 : 24]} />
         <meshStandardMaterial color={team.color} metalness={0.06} roughness={0.34} />
       </mesh>
-      <CoinStuds count={team.coins} />
+      <CoinStuds count={team.coins} reducedMotion={reducedMotion} />
     </group>
   )
 }
 
-function CoinStuds({ count }: { count: number }) {
-  return Array.from({ length: Math.min(count, 4) }, (_, index) => {
+function CoinStuds({ count, reducedMotion }: { count: number; reducedMotion: boolean }) {
+  const group = useRef<Group>(null)
+  const { invalidate } = useThree()
+  const elapsed = useRef<number | null>(null)
+  const previousCount = useRef(count)
+
+  useEffect(() => {
+    const gainedCoin = count > previousCount.current
+    previousCount.current = count
+    if (!gainedCoin || reducedMotion) return
+    elapsed.current = 0
+    invalidate()
+  }, [count, invalidate, reducedMotion])
+
+  useFrame((_, delta) => {
+    if (!group.current || elapsed.current === null) return
+    elapsed.current += Math.min(delta, 0.05)
+    const progress = Math.min(elapsed.current / 1.1, 1)
+    const burst = Math.sin(progress * Math.PI) * 0.45
+    group.current.position.y = burst
+    group.current.rotation.y = progress * Math.PI * 2
+    group.current.scale.setScalar(1 + Math.sin(progress * Math.PI) * 0.42)
+    if (progress >= 1) {
+      group.current.position.y = 0
+      group.current.rotation.y = 0
+      group.current.scale.setScalar(1)
+      elapsed.current = null
+      return
+    }
+    invalidate()
+  })
+
+  return <group ref={group}>{Array.from({ length: Math.min(count, 4) }, (_, index) => {
     const angle = index / 4 * Math.PI * 2 + Math.PI / 4
     return <mesh key={index} position={[Math.cos(angle) * 0.2, -0.17, Math.sin(angle) * 0.2]} castShadow><sphereGeometry args={[0.045, 10, 8]} /><meshStandardMaterial color="#f2bd2e" metalness={0.35} roughness={0.35} /></mesh>
-  })
+  })}</group>
 }
 
-function BoardAccessibleState({ board, teams }: { board: BoardSpace[]; teams: BoardTeam[] }) {
+function BoardAccessibleState({ board, teams, winnerTeamId }: { board: BoardSpace[]; teams: BoardTeam[]; winnerTeamId?: string }) {
+  const winner = teams.find((team) => team.id === winnerTeamId)
   return (
     <div className="sr-only">
       <h2>Estado del tablero</h2>
+      {winner ? <p>Ganador: {winner.name}.</p> : null}
       <ul>
         {teams.map((team) => <li key={team.id}>{teamStatus(team, board)}</li>)}
       </ul>
@@ -493,12 +635,14 @@ function BoardAccessibleState({ board, teams }: { board: BoardSpace[]; teams: Bo
   )
 }
 
-function BoardFallback({ board, message = 'Vista simplificada del tablero.', teams }: { board: BoardSpace[]; message?: string; teams: BoardTeam[] }) {
+function BoardFallback({ board, message = 'Vista simplificada del tablero.', teams, winnerTeamId }: { board: BoardSpace[]; message?: string; teams: BoardTeam[]; winnerTeamId?: string }) {
+  const winner = teams.find((team) => team.id === winnerTeamId)
   return (
     <div className="grid h-full min-h-56 place-items-center rounded-[1.4rem] border border-paper/15 bg-ink px-5 py-8 text-center text-paper">
       <div>
         <p className="text-[0.6rem] font-black uppercase tracking-[0.2em] text-saffron">Tablero</p>
         <p className="mt-2 font-display text-2xl">{message}</p>
+        {winner ? <p className="mt-2 font-display text-xl text-saffron">Ganó {winner.name}</p> : null}
         <ul className="mt-4 space-y-1 text-sm text-paper/70">
           {teams.map((team) => <li key={team.id}>{teamStatus(team, board)}</li>)}
         </ul>

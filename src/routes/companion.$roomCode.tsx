@@ -51,6 +51,7 @@ function CompanionRoom() {
   )
   const joinUrl = `${window.location.origin}/team/${roomCode}`
   const isActiveGame = lobby?.phase === 'active'
+  const isBoardView = isActiveGame || lobby?.phase === 'finished'
   const [soundEnabled, setSoundEnabled] = useState(false)
   const playSound = useCompanionSound(soundEnabled)
   const previousPhase = useRef<CompanionLobby['phase'] | undefined>(undefined)
@@ -75,9 +76,9 @@ function CompanionRoom() {
   }
 
   return (
-    <main className={isActiveGame ? 'min-h-screen bg-ink px-3 py-3 text-paper sm:px-6 sm:py-5 lg:px-8' : 'grid min-h-screen place-items-center bg-ink px-6 text-center text-paper'}>
-      <div className={isActiveGame ? 'mx-auto w-full max-w-[110rem]' : 'max-w-xl'}>
-        {!isActiveGame ? <>
+    <main className={isBoardView ? 'min-h-screen bg-ink px-3 py-3 text-paper sm:px-6 sm:py-5 lg:px-8' : 'grid min-h-screen place-items-center bg-ink px-6 text-center text-paper'}>
+      <div className={isBoardView ? 'mx-auto w-full max-w-[110rem]' : 'max-w-xl'}>
+        {!isBoardView ? <>
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-mint">Pantalla companion</p>
           <h1 className="mt-3 font-display text-6xl tracking-[-0.06em]">Sala {roomCode}</h1>
         </> : null}
@@ -112,7 +113,27 @@ function CompanionRoom() {
 
 function FinishedBoard({ lobby }: { lobby: CompanionLobby }) {
   const winner = lobby.winnerTeamId ? lobby.teams.find((team) => team.id === lobby.winnerTeamId) : undefined
-  return <section className="mt-8 rounded-[2rem] border border-saffron/60 bg-saffron p-8 text-ink"><p className="text-[0.65rem] font-black uppercase tracking-[0.2em] text-coral">Partida terminada</p><h2 className="mt-2 font-display text-6xl tracking-[-0.06em]">{winner?.name ?? 'Tenemos ganador'}</h2><p className="mt-3 text-lg font-semibold">{winner ? `${winner.coins} monedas · $${winner.money}` : 'El anfitrión puede cerrar la sala.'}</p></section>
+  return <section className="relative overflow-hidden rounded-[2rem] border border-saffron/45 bg-paper/8 text-left shadow-[0_28px_100px_rgb(0_0_0_/_0.45)]">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-saffron/18 to-transparent" />
+    <div className="relative z-20 flex flex-wrap items-end justify-between gap-4 px-5 pt-5 sm:px-8 sm:pt-7">
+      <div>
+        <p className="text-[0.65rem] font-black uppercase tracking-[0.24em] text-saffron">Partida terminada · Sala {lobby.code}</p>
+        <h1 className="mt-1 font-display text-4xl tracking-[-0.06em] text-paper sm:text-6xl">La mesa tiene campeón.</h1>
+      </div>
+      <p className="rounded-full border border-saffron/35 bg-saffron/12 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-saffron">Victoria</p>
+    </div>
+    <div className="relative mt-4 border-y border-paper/10 bg-ink/40">
+      <Board3D board={lobby.board} dice={lobby.lastDice} dimmed={false} rollId={lobby.lastRollId} teams={lobby.teams} winnerTeamId={lobby.winnerTeamId} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ink/70 to-transparent" />
+    </div>
+    <div className="relative z-20 grid gap-3 p-5 sm:grid-cols-[1fr_auto] sm:items-end sm:p-8">
+      <div>
+        <p className="text-[0.6rem] font-black uppercase tracking-[0.2em] text-coral">Equipo ganador</p>
+        <h2 className="mt-1 font-display text-5xl tracking-[-0.06em] text-saffron sm:text-7xl">{winner?.name ?? 'Tenemos ganador'}</h2>
+      </div>
+      <p className="text-base font-bold text-paper/70 sm:text-right sm:text-lg">{winner ? `${winner.coins} monedas · $${winner.money}` : 'El anfitrión puede cerrar la sala.'}</p>
+    </div>
+  </section>
 }
 
 function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: CompanionLobby; onToggleSound: () => void; playSound: (sound: CompanionSound) => void; soundEnabled: boolean }) {
@@ -122,9 +143,9 @@ function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: C
   const [dismissedResultRoundId, setDismissedResultRoundId] = useState<string | undefined>()
   const [exitingResultRoundId, setExitingResultRoundId] = useState<string | undefined>()
   const metricsToastVisible = Boolean(resolvedRoundId && dismissedResultRoundId === resolvedRoundId && dismissedMetricsRoundId !== resolvedRoundId)
-  const metricsToastExiting = exitingMetricsRoundId === resolvedRoundId
+  const metricsToastExiting = Boolean(resolvedRoundId && exitingMetricsRoundId === resolvedRoundId)
   const resultModalVisible = Boolean(resolvedRoundId && dismissedResultRoundId !== resolvedRoundId)
-  const resultModalExiting = exitingResultRoundId === resolvedRoundId
+  const resultModalExiting = Boolean(resolvedRoundId && exitingResultRoundId === resolvedRoundId)
   const cardIsOnTable = Boolean(lobby.round && lobby.roundState && (lobby.round.phase !== 'resolved' || resultModalVisible))
   const hasSeenRoll = useRef(false)
   const previousRollId = useRef<string | undefined>(undefined)
