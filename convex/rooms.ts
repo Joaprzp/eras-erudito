@@ -1,12 +1,15 @@
 import { v } from 'convex/values'
 
-import { mutation, query } from './_generated/server'
+import { internalMutation, mutation, query } from './_generated/server'
 import type { MutationCtx, QueryCtx } from './_generated/server'
 import type { Id } from './_generated/dataModel'
 import { cardDeck, type CardCategory, type QuestionCard } from './cardDeck'
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const CATEGORIES = ['sequence', 'association', 'common', 'approximation'] as const
+const EMPTY_LOBBY_TTL_MS = 30 * 60 * 1000
+const LOBBY_TTL_MS = 12 * 60 * 60 * 1000
+const GAME_TTL_MS = 24 * 60 * 60 * 1000
 
 type CategoryStat = { attempts: number; wins: number; totalResponseMs: number }
 type CategoryStats = Record<CardCategory, CategoryStat>
@@ -58,6 +61,7 @@ export const create = mutation({
       companionToken,
       phase: 'lobby',
       createdAt: Date.now(),
+      lastActivityAt: Date.now(),
     })
 
     return { code, companionToken }
@@ -100,6 +104,7 @@ export const join = mutation({
       isHost: teams.length === 0,
       status: 'connected',
     })
+    await touchRoom(ctx, room._id)
 
     return { teamId, token, isHost: teams.length === 0 }
   },
@@ -227,6 +232,7 @@ export const start = mutation({
       approximationRemainder: 0,
       shopTeamId: undefined,
       winnerTeamId: undefined,
+      lastActivityAt: Date.now(),
     })
 
     await Promise.all(
@@ -271,7 +277,10 @@ export const roll = mutation({
 
     const gameFinished = crossedStart ? await awardStartPassage(ctx, room, team) : false
     await ctx.db.patch(team._id, { position })
-    if (gameFinished) return { position, total }
+    if (gameFinished) {
+      await touchRoom(ctx, room._id)
+      return { position, total }
+    }
     await ctx.db.patch(room._id, {
       lastRoll: total,
       round: {
@@ -282,6 +291,7 @@ export const roll = mutation({
         phase: landedOnStart ? 'choose_category' : space!.category === 'approximation' ? 'choose_bet' : 'choose_rival',
       },
       shopTeamId: space?.isShop ? team._id : undefined,
+      lastActivityAt: Date.now(),
     })
 
     return { position, total }
@@ -297,6 +307,7 @@ export const chooseCategory = mutation({
     if (!round?.isStart) throw new Error('Esta categoría no se puede elegir ahora.')
     await ctx.db.patch(room._id, {
       round: { ...round, category: args.category, phase: args.category === 'approximation' ? 'choose_bet' : 'choose_rival' },
+      lastActivityAt: Date.now(),
     })
   },
 })
@@ -313,6 +324,7 @@ export const buyCoin = mutation({
     await ctx.db.patch(team._id, { coins, money: (team.money ?? 0) - 1000 })
     await ctx.db.patch(room._id, { shopTeamId: undefined })
     await finishIfWinner(ctx, room._id, team._id, coins)
+    await touchRoom(ctx, room._id)
   },
 })
 
@@ -335,6 +347,7 @@ export const chooseRival = mutation({
 
     await ctx.db.patch(room._id, {
       round: { ...round, targetId: target._id, phase: 'choose_bet' },
+      lastActivityAt: Date.now(),
     })
   },
 })
@@ -359,6 +372,7 @@ export const chooseBet = mutation({
 
     await ctx.db.patch(room._id, {
       round: { ...round, wager: args.wager, phase: 'awaiting_card' },
+      lastActivityAt: Date.now(),
     })
   },
 })
@@ -383,6 +397,7 @@ export const drawCard = mutation({
         ...usedCardIds.filter((cardId) => !categoryDeck.some((deckCard) => deckCard.id === cardId)),
         card.id,
       ],
+      lastActivityAt: Date.now(),
     })
 
     return { cardId: card.id, recycled: available.length === 0 }
@@ -433,6 +448,7 @@ export const submitResponse = mutation({
     if (responses.length === participants.length) {
       await ctx.db.patch(room._id, { round: { ...round, phase: 'ready_to_reveal' } })
     }
+    await touchRoom(ctx, room._id)
   },
 })
 
@@ -451,6 +467,7 @@ export const revealResponses = mutation({
     if (round.category !== 'common') {
       await settleRound(ctx, room, revealedRound, await calculateAutomaticResult(ctx, room, revealedRound))
     }
+    await touchRoom(ctx, room._id)
   },
 })
 
@@ -477,6 +494,7 @@ export const resolveCommon = mutation({
       if (winner) await ctx.db.patch(winner._id, { correctMarks: (winner.correctMarks ?? 0) + 1 })
     }
     await settleRound(ctx, room, round, { kind: args.outcome, winnerTeamIds })
+    await touchRoom(ctx, room._id)
   },
 })
 
@@ -488,7 +506,7 @@ export const advanceTurn = mutation({
     if (!team.isHost) throw new Error('Solo el anfitrión puede continuar la partida.')
     if (room.round?.phase !== 'resolved') throw new Error('Primero hay que resolver esta ronda.')
 
-    await ctx.db.patch(room._id, { lastRoll: undefined, round: undefined, shopTeamId: undefined })
+    await ctx.db.patch(room._id, { lastRoll: undefined, round: undefined, shopTeamId: undefined, lastActivityAt: Date.now() })
   },
 })
 
@@ -507,6 +525,7 @@ export const leave = mutation({
         await ctx.db.patch(nextHost._id, { isHost: true })
       }
     }
+    await touchRoom(ctx, room._id)
   },
 })
 
@@ -530,6 +549,7 @@ export const remove = mutation({
     }
 
     await ctx.db.delete(target._id)
+    await touchRoom(ctx, room._id)
   },
 })
 
@@ -548,9 +568,28 @@ export const close = mutation({
       throw new Error('Solo el anfitrión puede cerrar la sala.')
     }
 
-    const teams = await listTeams(ctx, room._id)
-    await Promise.all(teams.map((team) => ctx.db.delete(team._id)))
-    await ctx.db.delete(room._id)
+    await deleteRoom(ctx, room._id)
+  },
+})
+
+export const purgeExpired = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now()
+    const rooms = await ctx.db.query('rooms').collect()
+    let deletedRooms = 0
+
+    for (const room of rooms) {
+      const teams = await listTeams(ctx, room._id)
+      const expiresAt = (room.lastActivityAt ?? room.createdAt) + roomTtl(room.phase, teams.length)
+
+      if (expiresAt > now) continue
+
+      await deleteRoom(ctx, room._id, teams)
+      deletedRooms += 1
+    }
+
+    return { deletedRooms }
   },
 })
 
@@ -581,6 +620,33 @@ async function listTeams(ctx: MutationCtx | QueryCtx, roomId: Id<'rooms'>) {
     .withIndex('by_room', (index) => index.eq('roomId', roomId))
     .collect()
     .then((teams) => teams.sort((left, right) => left.joinIndex - right.joinIndex))
+}
+
+async function touchRoom(ctx: MutationCtx, roomId: Id<'rooms'>) {
+  await ctx.db.patch(roomId, { lastActivityAt: Date.now() })
+}
+
+async function deleteRoom(
+  ctx: MutationCtx,
+  roomId: Id<'rooms'>,
+  knownTeams?: Awaited<ReturnType<typeof listTeams>>,
+) {
+  const teams = knownTeams ?? await listTeams(ctx, roomId)
+  const responses = await ctx.db
+    .query('responses')
+    .withIndex('by_room', (index) => index.eq('roomId', roomId))
+    .collect()
+
+  await Promise.all([
+    ...teams.map((team) => ctx.db.delete(team._id)),
+    ...responses.map((response) => ctx.db.delete(response._id)),
+  ])
+  await ctx.db.delete(roomId)
+}
+
+function roomTtl(phase: 'lobby' | 'active' | 'finished', teamCount: number) {
+  if (phase === 'lobby') return teamCount === 0 ? EMPTY_LOBBY_TTL_MS : LOBBY_TTL_MS
+  return GAME_TTL_MS
 }
 
 async function requireLobbyTeam(ctx: MutationCtx, args: { code: string; token: string }) {

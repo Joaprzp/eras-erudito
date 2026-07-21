@@ -9,6 +9,7 @@
  */
 
 import type * as cardDeck from "../cardDeck.js";
+import type * as crons from "../crons.js";
 import type * as rooms from "../rooms.js";
 
 import type {
@@ -19,6 +20,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   cardDeck: typeof cardDeck;
+  crons: typeof crons;
   rooms: typeof rooms;
 }>;
 

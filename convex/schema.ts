@@ -14,6 +14,7 @@ export default defineSchema({
     companionToken: v.string(),
     phase: v.union(v.literal('lobby'), v.literal('active'), v.literal('finished')),
     createdAt: v.number(),
+    lastActivityAt: v.optional(v.number()),
     board: v.optional(v.array(v.object({ category, isShop: v.boolean(), maxBet: v.number() }))),
     lastRoll: v.optional(v.number()),
     round: v.optional(v.object({
@@ -80,6 +81,7 @@ export default defineSchema({
     submittedAt: v.number(),
     responseMs: v.optional(v.number()),
   })
+    .index('by_room', ['roomId'])
     .index('by_round', ['roundId'])
     .index('by_round_team', ['roundId', 'teamId']),
 })
