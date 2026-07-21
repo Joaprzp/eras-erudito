@@ -28,6 +28,8 @@ const SOUND_FILES = {
 const WIND_SOUND_FILE = '/sfx/seamless-wind.mp3'
 const WIND_VOLUME = 0.035
 const WIND_DUCKED_VOLUME = 0.011
+const RESULT_MODAL_EXIT_MS = 14_600
+const RESULT_MODAL_DISMISS_MS = 15_000
 
 type CompanionSound = keyof typeof SOUND_FILES
 
@@ -305,8 +307,8 @@ function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: C
   useEffect(() => {
     if (!resolvedRoundId) return
 
-    const exitTimeout = window.setTimeout(() => setExitingResultRoundId(resolvedRoundId), 5_400)
-    const dismissTimeout = window.setTimeout(() => setDismissedResultRoundId(resolvedRoundId), 5_800)
+    const exitTimeout = window.setTimeout(() => setExitingResultRoundId(resolvedRoundId), RESULT_MODAL_EXIT_MS)
+    const dismissTimeout = window.setTimeout(() => setDismissedResultRoundId(resolvedRoundId), RESULT_MODAL_DISMISS_MS)
     return () => {
       window.clearTimeout(exitTimeout)
       window.clearTimeout(dismissTimeout)
