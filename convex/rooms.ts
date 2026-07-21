@@ -282,16 +282,18 @@ export const roll = mutation({
 
     if (!landedOnStart && !space) throw new Error('No encontramos el casillero de destino.')
 
-    const gameFinished = crossedStart ? await awardStartPassage(ctx, room, team) : false
-    await ctx.db.patch(team._id, { position })
-    if (gameFinished) {
-      await touchRoom(ctx, room._id)
-      return { position, total }
-    }
     await ctx.db.patch(room._id, {
       lastDice: { first: firstDie, second: secondDie },
       lastRoll: total,
       lastRollId: crypto.randomUUID(),
+      lastActivityAt: Date.now(),
+    })
+    const gameFinished = crossedStart ? await awardStartPassage(ctx, room, team) : false
+    await ctx.db.patch(team._id, { position })
+    if (gameFinished) {
+      return { position, total }
+    }
+    await ctx.db.patch(room._id, {
       round: {
         category: landedOnStart ? 'sequence' : space!.category,
         challengerId: team._id,
@@ -300,7 +302,6 @@ export const roll = mutation({
         phase: landedOnStart ? 'choose_category' : space!.category === 'approximation' ? 'choose_bet' : 'choose_rival',
       },
       shopTeamId: space?.isShop ? team._id : undefined,
-      lastActivityAt: Date.now(),
     })
 
     return { position, total }
