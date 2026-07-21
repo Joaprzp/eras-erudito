@@ -576,7 +576,14 @@ export const purgeExpired = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now()
-    const rooms = await ctx.db.query('rooms').collect()
+    const [rooms, teams, responses] = await Promise.all([
+      ctx.db.query('rooms').collect(),
+      ctx.db.query('teams').collect(),
+      ctx.db.query('responses').collect(),
+    ])
+    const roomIds = new Set(rooms.map((room) => room._id))
+    const orphanedTeams = teams.filter((team) => !roomIds.has(team.roomId))
+    const orphanedResponses = responses.filter((response) => !roomIds.has(response.roomId))
     let deletedRooms = 0
 
     for (const room of rooms) {
@@ -589,7 +596,12 @@ export const purgeExpired = internalMutation({
       deletedRooms += 1
     }
 
-    return { deletedRooms }
+    await Promise.all([
+      ...orphanedTeams.map((team) => ctx.db.delete(team._id)),
+      ...orphanedResponses.map((response) => ctx.db.delete(response._id)),
+    ])
+
+    return { deletedOrphanedResponses: orphanedResponses.length, deletedOrphanedTeams: orphanedTeams.length, deletedRooms }
   },
 })
 
