@@ -25,17 +25,89 @@ const SOUND_FILES = {
   roundWon: '/sfx/round-won.mp3',
   tokenMove: '/sfx/token-move.mp3',
 } as const
+const WIND_SOUND_FILE = '/sfx/seamless-wind.mp3'
+const WIND_VOLUME = 0.035
+const WIND_DUCKED_VOLUME = 0.011
 
 type CompanionSound = keyof typeof SOUND_FILES
 
-function useCompanionSound(enabled: boolean) {
+function useCompanionSound(enabled: boolean, duckWind: () => void) {
   return useCallback((sound: CompanionSound) => {
     if (!enabled) return
 
+    duckWind()
     const audio = new Audio(SOUND_FILES[sound])
     audio.volume = sound === 'gameWon' ? 0.28 : 0.2
     void audio.play().catch(() => undefined)
-  }, [enabled])
+  }, [duckWind, enabled])
+}
+
+function useAmbientWind(enabled: boolean, naturallyDucked: boolean) {
+  const audio = useRef<HTMLAudioElement | null>(null)
+  const fadeFrame = useRef<number | null>(null)
+  const duckTimeout = useRef<number | null>(null)
+  const [effectDucked, setEffectDucked] = useState(false)
+
+  const ensureAudio = useCallback(() => {
+    if (audio.current) return audio.current
+    const wind = new Audio(WIND_SOUND_FILE)
+    wind.loop = true
+    wind.preload = 'auto'
+    wind.volume = 0
+    audio.current = wind
+    return wind
+  }, [])
+
+  const activate = useCallback(() => {
+    const wind = ensureAudio()
+    void wind.play().catch(() => undefined)
+  }, [ensureAudio])
+
+  const duckForEffect = useCallback(() => {
+    setEffectDucked(true)
+    if (duckTimeout.current !== null) window.clearTimeout(duckTimeout.current)
+    duckTimeout.current = window.setTimeout(() => {
+      setEffectDucked(false)
+      duckTimeout.current = null
+    }, 1_600)
+  }, [])
+
+  useEffect(() => {
+    const wind = enabled ? ensureAudio() : audio.current
+    if (!wind) return
+    if (enabled && wind.paused) void wind.play().catch(() => undefined)
+    if (fadeFrame.current !== null) window.cancelAnimationFrame(fadeFrame.current)
+
+    const target = enabled ? naturallyDucked || effectDucked ? WIND_DUCKED_VOLUME : WIND_VOLUME : 0
+    const initial = wind.volume
+    const startedAt = performance.now()
+    const duration = enabled ? 1_800 : 700
+    const fade = (now: number) => {
+      const progress = Math.max(0, Math.min((now - startedAt) / duration, 1))
+      const eased = 1 - Math.pow(1 - progress, 3)
+      wind.volume = Math.max(0, Math.min(initial + (target - initial) * eased, 1))
+      if (progress < 1) {
+        fadeFrame.current = window.requestAnimationFrame(fade)
+        return
+      }
+      fadeFrame.current = null
+      if (!enabled) wind.pause()
+    }
+    fadeFrame.current = window.requestAnimationFrame(fade)
+
+    return () => {
+      if (fadeFrame.current !== null) window.cancelAnimationFrame(fadeFrame.current)
+    }
+  }, [effectDucked, enabled, ensureAudio, naturallyDucked])
+
+  useEffect(() => () => {
+    if (fadeFrame.current !== null) window.cancelAnimationFrame(fadeFrame.current)
+    if (duckTimeout.current !== null) window.clearTimeout(duckTimeout.current)
+    audio.current?.pause()
+    audio.current = null
+  }, [])
+
+  return { activate, duckForEffect }
 }
 
 function SoundControl({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
@@ -53,7 +125,9 @@ function CompanionRoom() {
   const isActiveGame = lobby?.phase === 'active'
   const isBoardView = isActiveGame || lobby?.phase === 'finished'
   const [soundEnabled, setSoundEnabled] = useState(false)
-  const playSound = useCompanionSound(soundEnabled)
+  const ambientDucked = Boolean(isActiveGame && lobby?.round && lobby.roundState)
+  const { activate: activateWind, duckForEffect: duckWind } = useAmbientWind(soundEnabled, ambientDucked)
+  const playSound = useCompanionSound(soundEnabled, duckWind)
   const previousPhase = useRef<CompanionLobby['phase'] | undefined>(undefined)
 
   useEffect(() => {
@@ -69,6 +143,7 @@ function CompanionRoom() {
       return
     }
 
+    activateWind()
     setSoundEnabled(true)
     const preview = new Audio(SOUND_FILES.answersReady)
     preview.volume = 0.18
@@ -86,7 +161,7 @@ function CompanionRoom() {
         {token && lobby === undefined ? <p className="mt-5 text-paper/65">Abriendo la sala…</p> : null}
         {token && lobby === null ? <p className="mt-5 text-coral">No encontramos esta sala.</p> : null}
         {lobby ? (
-          lobby.phase === 'active' ? <GameBoard lobby={lobby} soundEnabled={soundEnabled} onToggleSound={toggleSound} playSound={playSound} /> : lobby.phase === 'finished' ? <FinishedBoard lobby={lobby} /> : <div className="mt-8 grid gap-6 rounded-3xl border border-paper/20 bg-paper/8 p-6 text-left sm:grid-cols-[1fr_auto]">
+          lobby.phase === 'active' ? <GameBoard lobby={lobby} soundEnabled={soundEnabled} onToggleSound={toggleSound} playSound={playSound} /> : lobby.phase === 'finished' ? <FinishedBoard lobby={lobby} soundEnabled={soundEnabled} onToggleSound={toggleSound} /> : <div className="mt-8 grid gap-6 rounded-3xl border border-paper/20 bg-paper/8 p-6 text-left sm:grid-cols-[1fr_auto]">
             <div>
               <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-saffron">Código para equipos</p>
               <p className="mt-2 font-display text-6xl tracking-[0.1em]">{lobby.code}</p>
@@ -111,7 +186,7 @@ function CompanionRoom() {
   )
 }
 
-function FinishedBoard({ lobby }: { lobby: CompanionLobby }) {
+function FinishedBoard({ lobby, onToggleSound, soundEnabled }: { lobby: CompanionLobby; onToggleSound: () => void; soundEnabled: boolean }) {
   const winner = lobby.winnerTeamId ? lobby.teams.find((team) => team.id === lobby.winnerTeamId) : undefined
   return <section className="relative overflow-hidden rounded-[2rem] border border-saffron/45 bg-paper/8 text-left shadow-[0_28px_100px_rgb(0_0_0_/_0.45)]">
     <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-saffron/18 to-transparent" />
@@ -120,7 +195,7 @@ function FinishedBoard({ lobby }: { lobby: CompanionLobby }) {
         <p className="text-[0.65rem] font-black uppercase tracking-[0.24em] text-saffron">Partida terminada · Sala {lobby.code}</p>
         <h1 className="mt-1 font-display text-4xl tracking-[-0.06em] text-paper sm:text-6xl">La mesa tiene campeón.</h1>
       </div>
-      <p className="rounded-full border border-saffron/35 bg-saffron/12 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-saffron">Victoria</p>
+      <div className="flex items-center gap-2"><SoundControl enabled={soundEnabled} onClick={onToggleSound} /><p className="rounded-full border border-saffron/35 bg-saffron/12 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-saffron">Victoria</p></div>
     </div>
     <div className="relative mt-4 border-y border-paper/10 bg-ink/40">
       <Board3D board={lobby.board} dice={lobby.lastDice} dimmed={false} rollId={lobby.lastRollId} teams={lobby.teams} winnerTeamId={lobby.winnerTeamId} />

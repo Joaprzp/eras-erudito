@@ -74,7 +74,7 @@ export function Board3D({ activeTeamId, board, dice, dimmed, rollId, teams, winn
             gl={{ alpha: false, antialias: true, powerPreference: 'default' }}
             shadows="basic"
           >
-            <BoardScene activeTeamId={activeTeamId} board={board} dice={dice} rollId={rollId} teams={teams} winnerTeamId={winnerTeamId} onContextLost={setContextLost} />
+            <BoardScene activeTeamId={activeTeamId} board={board} cloudsActive={!dimmed} dice={dice} rollId={rollId} teams={teams} winnerTeamId={winnerTeamId} onContextLost={setContextLost} />
           </Canvas>
         </div>
       </BoardSceneErrorBoundary>
@@ -85,7 +85,7 @@ export function Board3D({ activeTeamId, board, dice, dimmed, rollId, teams, winn
   )
 }
 
-function BoardScene({ activeTeamId, board, dice, onContextLost, rollId, teams, winnerTeamId }: { activeTeamId?: string; board: BoardSpace[]; dice?: { first: number; second: number }; onContextLost: (lost: boolean) => void; rollId?: string; teams: BoardTeam[]; winnerTeamId?: string }) {
+function BoardScene({ activeTeamId, board, cloudsActive, dice, onContextLost, rollId, teams, winnerTeamId }: { activeTeamId?: string; board: BoardSpace[]; cloudsActive: boolean; dice?: { first: number; second: number }; onContextLost: (lost: boolean) => void; rollId?: string; teams: BoardTeam[]; winnerTeamId?: string }) {
   const { size } = useThree()
   const columns = size.width < 640 ? 9 : 14
   const layout = useMemo(() => createBoardLayout(columns), [columns])
@@ -122,6 +122,7 @@ function BoardScene({ activeTeamId, board, dice, onContextLost, rollId, teams, w
         <TableSurface columns={columns} rows={layout.rows} />
         <PathLinks positions={layout.positions} />
         <DicePair dice={dice} reducedMotion={reducedMotion} rollId={rollId} rows={layout.rows} />
+        <CloudLayer active={cloudsActive} columns={columns} reducedMotion={reducedMotion} />
         {winnerTeamId ? <VictoryConfetti columns={columns} reducedMotion={reducedMotion} rows={layout.rows} winnerTeamId={winnerTeamId} /> : null}
         {layout.positions.map((position, index) => (
           <BoardTile
@@ -241,6 +242,43 @@ function DicePair({ dice, reducedMotion, rollId, rows }: { dice?: { first: numbe
       </mesh>
       <Die direction={1} position={[-0.34, 0, 0]} reducedMotion={reducedMotion} rollId={rollId} value={dice.first} />
       <Die direction={-1} position={[0.34, 0, 0]} reducedMotion={reducedMotion} rollId={rollId} value={dice.second} />
+    </group>
+  )
+}
+
+function CloudLayer({ active, columns, reducedMotion }: { active: boolean; columns: number; reducedMotion: boolean }) {
+  const firstCloud = useRef<Group>(null)
+  const secondCloud = useRef<Group>(null)
+  const elapsed = useRef(0)
+  const { invalidate } = useThree()
+  const span = columns * (TILE_WIDTH + TILE_GAP) + 7
+  const texture = useMemo(() => createCloudTexture(), [])
+
+  useEffect(() => () => texture.dispose(), [texture])
+
+  useEffect(() => {
+    if (!active || reducedMotion) return
+    const interval = window.setInterval(() => {
+      if (!document.hidden) invalidate()
+    }, 160)
+    return () => window.clearInterval(interval)
+  }, [active, invalidate, reducedMotion])
+
+  useFrame((_, delta) => {
+    if (!active || reducedMotion) return
+    elapsed.current += Math.min(delta, 0.18)
+    if (firstCloud.current) firstCloud.current.position.x = (elapsed.current * 0.16 + span * 0.16) % span - span / 2
+    if (secondCloud.current) secondCloud.current.position.x = (elapsed.current * 0.11 + span * 0.72) % span - span / 2
+  })
+
+  return (
+    <group>
+      <group ref={firstCloud} position={[-span * 0.34, 4.2, -1.35]}>
+        <sprite renderOrder={4} scale={[4.6, 1.65, 1]}><spriteMaterial map={texture} color={PAPER} depthWrite={false} opacity={0.16} transparent toneMapped={false} /></sprite>
+      </group>
+      <group ref={secondCloud} position={[span * 0.22, 4.85, 1.6]}>
+        <sprite renderOrder={4} scale={[3.8, 1.35, 1]}><spriteMaterial map={texture} color={PAPER} depthWrite={false} opacity={0.11} transparent toneMapped={false} /></sprite>
+      </group>
     </group>
   )
 }
@@ -737,6 +775,34 @@ function createBadgeTexture(label: string) {
   context.textBaseline = 'middle'
   context.font = '900 80px Georgia'
   context.fillText(label, 64, 67)
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  return texture
+}
+
+function createCloudTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 192
+  const context = canvas.getContext('2d')
+  if (!context) return new CanvasTexture(canvas)
+  context.clearRect(0, 0, canvas.width, canvas.height)
+  context.save()
+  context.filter = 'blur(8px)'
+  context.fillStyle = 'rgb(247 239 217 / 0.9)'
+  const puffs: Array<[number, number, number, number]> = [
+    [82, 111, 70, 38],
+    [166, 86, 92, 54],
+    [267, 78, 112, 62],
+    [372, 96, 94, 50],
+    [448, 113, 58, 33],
+  ]
+  for (const [x, y, radiusX, radiusY] of puffs) {
+    context.beginPath()
+    context.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2)
+    context.fill()
+  }
+  context.restore()
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
   return texture
