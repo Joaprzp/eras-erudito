@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { Component, type ErrorInfo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CanvasTexture,
   Color,
@@ -9,6 +9,7 @@ import {
   Vector3,
   type Group,
   type InstancedMesh,
+  type MeshBasicMaterial,
   type OrthographicCamera,
 } from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
@@ -43,6 +44,43 @@ type Board3DProps = {
 
 type Board3DState = {
   hasError: boolean
+}
+
+class CameraMotionController {
+  private holdElapsed = 0
+  private phase: 'idle' | 'follow' | 'hold' | 'return' = 'idle'
+  readonly target = new Vector3()
+
+  get mode() {
+    return this.phase
+  }
+
+  follow(position: Vector3) {
+    this.target.copy(position)
+    this.phase = 'follow'
+  }
+
+  track(position: Vector3) {
+    this.target.copy(position)
+  }
+
+  land(position: Vector3) {
+    this.target.copy(position)
+    this.holdElapsed = 0
+    this.phase = 'hold'
+  }
+
+  advance(delta: number) {
+    if (this.phase !== 'hold') return
+    this.holdElapsed += delta
+    if (this.holdElapsed >= 0.32) this.phase = 'return'
+  }
+
+  reset() {
+    this.holdElapsed = 0
+    this.phase = 'idle'
+    this.target.set(0, 0, 0)
+  }
 }
 
 const TOTAL_SPACES = 54
@@ -90,6 +128,21 @@ function BoardScene({ activeTeamId, board, cloudsActive, dice, onContextLost, ro
   const columns = size.width < 640 ? 9 : 14
   const layout = useMemo(() => createBoardLayout(columns), [columns])
   const reducedMotion = useReducedMotion()
+  const [landing, setLanding] = useState({ position: -1, sequence: 0 })
+  const landingSequence = useRef(0)
+  const cameraMotion = useMemo(() => new CameraMotionController(), [])
+  const handleMoveStart = useCallback((position: Vector3) => {
+    cameraMotion.follow(position)
+  }, [cameraMotion])
+  const handleMove = useCallback((position: Vector3) => {
+    cameraMotion.track(position)
+  }, [cameraMotion])
+  const handleLanded = useCallback((position: number, worldPosition: Vector3) => {
+    landingSequence.current += 1
+    setLanding({ position, sequence: landingSequence.current })
+    if (reducedMotion) cameraMotion.reset()
+    else cameraMotion.land(worldPosition)
+  }, [cameraMotion, reducedMotion])
   const teamsByPosition = useMemo(() => {
     const result = new Map<number, BoardTeam[]>()
     for (const team of teams) result.set(team.position, [...(result.get(team.position) ?? []), team])
@@ -115,7 +168,7 @@ function BoardScene({ activeTeamId, board, cloudsActive, dice, onContextLost, ro
         shadow-camera-top={7}
       />
       {winnerTeamId ? <pointLight color="#f2bd2e" intensity={8} position={[0, 5, 1]} distance={18} decay={1.5} /> : null}
-      <CameraRig columns={columns} rows={layout.rows} />
+      <CameraRig columns={columns} motion={cameraMotion} reducedMotion={reducedMotion} rows={layout.rows} />
       <ContextMonitor onChange={onContextLost} />
 
       <group rotation={[0, -0.015, 0]}>
@@ -128,7 +181,9 @@ function BoardScene({ activeTeamId, board, cloudsActive, dice, onContextLost, ro
           <BoardTile
             key={index}
             index={index}
+            landingKey={landing.position === index ? landing.sequence : 0}
             position={position}
+            reducedMotion={reducedMotion}
             space={index === 0 ? undefined : board[index - 1]}
           />
         ))}
@@ -139,6 +194,9 @@ function BoardScene({ activeTeamId, board, cloudsActive, dice, onContextLost, ro
               key={`${team.id}:${columns}`}
               active={team.id === activeTeamId}
               layout={layout.positions}
+              onLanded={handleLanded}
+              onMove={handleMove}
+              onMoveStart={handleMoveStart}
               reducedMotion={reducedMotion}
               slotCount={colocated.length}
               slotIndex={colocated.findIndex((item) => item.id === team.id)}
@@ -153,10 +211,13 @@ function BoardScene({ activeTeamId, board, cloudsActive, dice, onContextLost, ro
   )
 }
 
-function CameraRig({ columns, rows }: { columns: number; rows: number }) {
+function CameraRig({ columns, motion, reducedMotion, rows }: { columns: number; motion: CameraMotionController; reducedMotion: boolean; rows: number }) {
   const camera = useRef<OrthographicCamera>(null)
   const { camera: defaultCamera, invalidate, set, size } = useThree()
   const previousCamera = useRef(defaultCamera)
+  const focus = useRef(new Vector3())
+  const strength = useRef(0)
+  const framing = useRef({ baseY: 11.5, baseZ: 7.4, baseZoom: 1, pan: 0.34, zoom: 0.15 })
 
   useEffect(() => {
     const orthographic = camera.current
@@ -169,16 +230,67 @@ function CameraRig({ columns, rows }: { columns: number; rows: number }) {
     orthographic.right = size.width / 2
     orthographic.top = size.height / 2
     orthographic.bottom = -size.height / 2
-    orthographic.position.set(0, portrait ? 13 : 11.5, portrait ? 8.5 : 7.4)
+    const baseY = portrait ? 13 : 11.5
+    const baseZ = portrait ? 8.5 : 7.4
+    orthographic.position.set(0, baseY, baseZ)
     orthographic.lookAt(0, 0, 0)
     const verticalWorld = boardDepth + (portrait ? 5.5 : 3.8)
     const horizontalWorld = boardWidth + 2.2
-    orthographic.zoom = Math.min(size.height / verticalWorld, size.width / horizontalWorld)
+    const baseZoom = Math.min(size.height / verticalWorld, size.width / horizontalWorld)
+    orthographic.zoom = baseZoom
     orthographic.updateProjectionMatrix()
+    framing.current = { baseY, baseZ, baseZoom, pan: portrait ? 0.22 : 0.34, zoom: portrait ? 0.1 : 0.15 }
+    focus.current.set(0, 0, 0)
+    strength.current = 0
+    motion.reset()
     set({ camera: orthographic })
     invalidate()
     return () => set({ camera: fallbackCamera })
-  }, [columns, invalidate, rows, set, size.height, size.width])
+  }, [columns, invalidate, motion, rows, set, size.height, size.width])
+
+  useFrame((_, delta) => {
+    const orthographic = camera.current
+    if (!orthographic) return
+    const settings = framing.current
+
+    if (reducedMotion) {
+      if (strength.current === 0) return
+      strength.current = 0
+      focus.current.set(0, 0, 0)
+      motion.reset()
+      orthographic.position.set(0, settings.baseY, settings.baseZ)
+      orthographic.lookAt(0, 0, 0)
+      orthographic.zoom = settings.baseZoom
+      orthographic.updateProjectionMatrix()
+      return
+    }
+
+    if (motion.mode === 'idle' && strength.current === 0) return
+    motion.advance(Math.min(delta, 0.05))
+
+    const targetStrength = motion.mode === 'follow' || motion.mode === 'hold' ? 1 : 0
+    const damping = targetStrength ? 6 : 4.2
+    strength.current = MathUtils.damp(strength.current, targetStrength, damping, Math.min(delta, 0.05))
+    focus.current.lerp(motion.target, 1 - Math.exp(-Math.min(delta, 0.05) * 6))
+    const centerX = focus.current.x * settings.pan * strength.current
+    const centerZ = focus.current.z * settings.pan * strength.current
+    orthographic.position.set(centerX, settings.baseY, settings.baseZ + centerZ)
+    orthographic.lookAt(centerX, 0, centerZ)
+    orthographic.zoom = settings.baseZoom * (1 + settings.zoom * strength.current)
+    orthographic.updateProjectionMatrix()
+
+    if (motion.mode === 'return' && strength.current < 0.002) {
+      strength.current = 0
+      focus.current.set(0, 0, 0)
+      motion.reset()
+      orthographic.position.set(0, settings.baseY, settings.baseZ)
+      orthographic.lookAt(0, 0, 0)
+      orthographic.zoom = settings.baseZoom
+      orthographic.updateProjectionMatrix()
+      return
+    }
+    invalidate()
+  })
 
   return <orthographicCamera ref={camera} far={100} near={0.1} />
 }
@@ -426,17 +538,40 @@ function PathLinks({ positions }: { positions: Vector3[] }) {
   )
 }
 
-function BoardTile({ index, position, space }: { index: number; position: Vector3; space?: BoardSpace }) {
+function BoardTile({ index, landingKey, position, reducedMotion, space }: { index: number; landingKey: number; position: Vector3; reducedMotion: boolean; space?: BoardSpace }) {
+  const tile = useRef<Group>(null)
+  const landingElapsed = useRef<number | null>(null)
+  const { invalidate } = useThree()
   const isStart = index === 0
   const color = isStart ? PAPER : CATEGORY_COLORS[space!.category]
-  const texture = useMemo(() => createTileTexture(isStart ? 'INICIO' : `$${space!.maxBet}`), [isStart, space])
+  const texture = useMemo(() => createTileTexture(isStart ? 'INICIO' : `$${space!.maxBet}`, space?.category), [isStart, space])
 
   useEffect(() => () => texture.dispose(), [texture])
 
+  useEffect(() => {
+    if (!landingKey || reducedMotion) return
+    landingElapsed.current = 0
+    invalidate()
+  }, [invalidate, landingKey, reducedMotion])
+
+  useFrame((_, delta) => {
+    if (!tile.current || landingElapsed.current === null) return
+    landingElapsed.current += Math.min(delta, 0.05)
+    const progress = Math.min(landingElapsed.current / 0.82, 1)
+    tile.current.position.y = Math.sin(progress * Math.PI) * 0.065
+    if (progress >= 1) {
+      tile.current.position.y = 0
+      landingElapsed.current = null
+      return
+    }
+    invalidate()
+  })
+
   return (
-    <group position={[position.x, 0, position.z]}>
+    <group ref={tile} position={[position.x, 0, position.z]}>
       {isStart ? <StartGate /> : null}
       {space?.isShop ? <ShopMarker /> : null}
+      {landingKey && !reducedMotion ? <LandingPulse key={landingKey} color={color} /> : null}
       <mesh castShadow receiveShadow position={[0, isStart ? -0.005 : 0, 0]}>
         <boxGeometry args={[isStart ? TILE_WIDTH + 0.11 : TILE_WIDTH, 0.11, isStart ? TILE_DEPTH + 0.11 : TILE_DEPTH]} />
         <meshStandardMaterial color={isStart ? '#d99b1d' : INK} metalness={isStart ? 0.14 : 0} roughness={0.72} />
@@ -448,6 +583,36 @@ function BoardTile({ index, position, space }: { index: number; position: Vector
       <mesh position={[0, 0.146, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[TILE_WIDTH * 0.88, TILE_DEPTH * 0.78]} />
         <meshBasicMaterial map={texture} transparent toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
+function LandingPulse({ color }: { color: string }) {
+  const ripple = useRef<Group>(null)
+  const ringMaterial = useRef<MeshBasicMaterial>(null)
+  const outlineMaterial = useRef<MeshBasicMaterial>(null)
+  const elapsed = useRef(0)
+  const { invalidate } = useThree()
+
+  useFrame((_, delta) => {
+    elapsed.current += Math.min(delta, 0.05)
+    const progress = Math.min(elapsed.current / 1.05, 1)
+    const visibility = Math.sin(progress * Math.PI)
+    if (ripple.current) ripple.current.scale.setScalar(0.72 + progress * 0.9)
+    if (ringMaterial.current) ringMaterial.current.opacity = visibility * 0.9
+    if (outlineMaterial.current) outlineMaterial.current.opacity = (1 - progress) * 0.72
+    if (progress < 1) invalidate()
+  })
+
+  return (
+    <group>
+      <group ref={ripple} position={[0, 0.285, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh><ringGeometry args={[0.27, 0.34, 28]} /><meshBasicMaterial ref={ringMaterial} color={PAPER} opacity={0} transparent toneMapped={false} /></mesh>
+      </group>
+      <mesh position={[0, 0.135, 0]}>
+        <boxGeometry args={[TILE_WIDTH + 0.1, 0.27, TILE_DEPTH + 0.1]} />
+        <meshBasicMaterial ref={outlineMaterial} color={color} opacity={0.72} transparent toneMapped={false} wireframe />
       </mesh>
     </group>
   )
@@ -491,7 +656,7 @@ function ShopMarker() {
   )
 }
 
-function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, variant, winner }: { active: boolean; layout: Vector3[]; reducedMotion: boolean; slotCount: number; slotIndex: number; team: BoardTeam; variant: number; winner: boolean }) {
+function TeamPawn({ active, layout, onLanded, onMove, onMoveStart, reducedMotion, slotCount, slotIndex, team, variant, winner }: { active: boolean; layout: Vector3[]; onLanded: (position: number, worldPosition: Vector3) => void; onMove: (worldPosition: Vector3) => void; onMoveStart: (worldPosition: Vector3) => void; reducedMotion: boolean; slotCount: number; slotIndex: number; team: BoardTeam; variant: number; winner: boolean }) {
   const pawn = useRef<Group>(null)
   const { invalidate } = useThree()
   const logicalPosition = useRef(team.position)
@@ -511,12 +676,14 @@ function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, v
     if (reducedMotion) {
       const target = layout[team.position]
       pawn.current.position.set(target.x + slotOffset.x, 0.38, target.z + slotOffset.z)
+      onLanded(team.position, pawn.current.position)
       invalidate()
       return
     }
     animation.current = { crossedStart: previous + steps >= TOTAL_SPACES, elapsed: 0, from: previous, steps }
+    onMoveStart(pawn.current.position)
     invalidate()
-  }, [invalidate, layout, reducedMotion, slotOffset.x, slotOffset.z, team.position])
+  }, [invalidate, layout, onLanded, onMoveStart, reducedMotion, slotOffset.x, slotOffset.z, team.position])
 
   useEffect(() => {
     if (!winner) return
@@ -526,7 +693,7 @@ function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, v
 
   useFrame((_, delta) => {
     if (!pawn.current || !animation.current) return
-    const durationPerSpace = 0.13
+    const durationPerSpace = 0.17
     const motion = animation.current
     motion.elapsed += Math.min(delta, 0.05)
     const rawProgress = motion.elapsed / durationPerSpace
@@ -542,6 +709,7 @@ function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, v
       0.38 + Math.sin(segmentProgress * Math.PI) * 0.34,
       MathUtils.lerp(from.z, to.z, eased) + slotOffset.z,
     )
+    onMove(pawn.current.position)
     const lift = Math.sin(segmentProgress * Math.PI)
     pawn.current.scale.set(1 - lift * 0.07, 1 + lift * 0.14, 1 - lift * 0.07)
     pawn.current.rotation.y += delta * 4.4
@@ -552,6 +720,7 @@ function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, v
       pawn.current.scale.setScalar(1)
       if (motion.crossedStart) passageElapsed.current = 0
       animation.current = null
+      onLanded(team.position, pawn.current.position)
       if (motion.crossedStart) invalidate()
       return
     }
@@ -718,7 +887,7 @@ function createBoardLayout(columns: number) {
   return { positions, rows }
 }
 
-function createTileTexture(label: string) {
+function createTileTexture(label: string, category?: BoardCategory) {
   const canvas = document.createElement('canvas')
   canvas.width = 256
   canvas.height = 160
@@ -730,9 +899,62 @@ function createTileTexture(label: string) {
   context.textBaseline = 'top'
   context.font = label === 'INICIO' ? '900 43px Georgia' : '900 48px sans-serif'
   context.fillText(label, 14, 16)
+  if (category) drawCategoryIcon(context, category)
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
   return texture
+}
+
+function drawCategoryIcon(context: CanvasRenderingContext2D, category: BoardCategory) {
+  const centerX = 208
+  const centerY = 104
+  context.save()
+  context.strokeStyle = INK
+  context.fillStyle = INK
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+  context.lineWidth = 7
+
+  if (category === 'sequence') {
+    const points: Array<[number, number]> = [[176, 118], [198, 94], [220, 110], [239, 80]]
+    context.beginPath()
+    points.forEach(([x, y], index) => index === 0 ? context.moveTo(x, y) : context.lineTo(x, y))
+    context.stroke()
+    for (const [x, y] of points) {
+      context.beginPath()
+      context.arc(x, y, 7, 0, Math.PI * 2)
+      context.fill()
+    }
+  } else if (category === 'association') {
+    const left = [[181, 84], [181, 122]]
+    const right = [[235, 84], [235, 122]]
+    context.beginPath()
+    context.moveTo(left[0][0], left[0][1])
+    context.lineTo(right[1][0], right[1][1])
+    context.moveTo(left[1][0], left[1][1])
+    context.lineTo(right[0][0], right[0][1])
+    context.stroke()
+    for (const [x, y] of [...left, ...right]) {
+      context.beginPath()
+      context.arc(x, y, 8, 0, Math.PI * 2)
+      context.fill()
+    }
+  } else if (category === 'common') {
+    context.beginPath()
+    context.arc(196, centerY, 27, 0, Math.PI * 2)
+    context.arc(220, centerY, 27, 0, Math.PI * 2)
+    context.stroke()
+  } else {
+    context.beginPath()
+    context.arc(centerX, centerY, 30, 0, Math.PI * 2)
+    context.moveTo(centerX + 18, centerY)
+    context.arc(centerX, centerY, 18, 0, Math.PI * 2)
+    context.stroke()
+    context.beginPath()
+    context.arc(centerX, centerY, 6, 0, Math.PI * 2)
+    context.fill()
+  }
+  context.restore()
 }
 
 function createMonogramTexture(name: string) {
