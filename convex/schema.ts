@@ -16,7 +16,9 @@ export default defineSchema({
     createdAt: v.number(),
     lastActivityAt: v.optional(v.number()),
     board: v.optional(v.array(v.object({ category, isShop: v.boolean(), maxBet: v.number() }))),
+    lastDice: v.optional(v.object({ first: v.number(), second: v.number() })),
     lastRoll: v.optional(v.number()),
+    lastRollId: v.optional(v.string()),
     round: v.optional(v.object({
       category,
       challengerId: v.id('teams'),

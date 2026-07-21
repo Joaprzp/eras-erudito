@@ -8,6 +8,7 @@ import {
   type Group,
   type OrthographicCamera,
 } from 'three'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 
 export type BoardCategory = 'sequence' | 'association' | 'common' | 'approximation'
 
@@ -30,7 +31,9 @@ export type BoardTeam = {
 type Board3DProps = {
   activeTeamId?: string
   board: BoardSpace[]
+  dice?: { first: number; second: number }
   dimmed: boolean
+  rollId?: string
   teams: BoardTeam[]
 }
 
@@ -51,7 +54,7 @@ const CATEGORY_COLORS: Record<BoardCategory, string> = {
 const INK = '#21160f'
 const PAPER = '#f7efd9'
 
-export function Board3D({ activeTeamId, board, dimmed, teams }: Board3DProps) {
+export function Board3D({ activeTeamId, board, dice, dimmed, rollId, teams }: Board3DProps) {
   const [contextLost, setContextLost] = useState(false)
 
   return (
@@ -67,7 +70,7 @@ export function Board3D({ activeTeamId, board, dimmed, teams }: Board3DProps) {
             gl={{ alpha: false, antialias: true, powerPreference: 'default' }}
             shadows="basic"
           >
-            <BoardScene activeTeamId={activeTeamId} board={board} teams={teams} onContextLost={setContextLost} />
+            <BoardScene activeTeamId={activeTeamId} board={board} dice={dice} rollId={rollId} teams={teams} onContextLost={setContextLost} />
           </Canvas>
         </div>
       </BoardSceneErrorBoundary>
@@ -78,7 +81,7 @@ export function Board3D({ activeTeamId, board, dimmed, teams }: Board3DProps) {
   )
 }
 
-function BoardScene({ activeTeamId, board, onContextLost, teams }: { activeTeamId?: string; board: BoardSpace[]; onContextLost: (lost: boolean) => void; teams: BoardTeam[] }) {
+function BoardScene({ activeTeamId, board, dice, onContextLost, rollId, teams }: { activeTeamId?: string; board: BoardSpace[]; dice?: { first: number; second: number }; onContextLost: (lost: boolean) => void; rollId?: string; teams: BoardTeam[] }) {
   const { size } = useThree()
   const columns = size.width < 640 ? 9 : 14
   const layout = useMemo(() => createBoardLayout(columns), [columns])
@@ -113,6 +116,7 @@ function BoardScene({ activeTeamId, board, onContextLost, teams }: { activeTeamI
       <group rotation={[0, -0.015, 0]}>
         <TableSurface columns={columns} rows={layout.rows} />
         <PathLinks positions={layout.positions} />
+        <DicePair dice={dice} reducedMotion={reducedMotion} rollId={rollId} rows={layout.rows} />
         {layout.positions.map((position, index) => (
           <BoardTile
             key={index}
@@ -198,7 +202,7 @@ function ContextMonitor({ onChange }: { onChange: (lost: boolean) => void }) {
 
 function TableSurface({ columns, rows }: { columns: number; rows: number }) {
   const width = columns * (TILE_WIDTH + TILE_GAP) + 1.05
-  const depth = rows * (TILE_DEPTH + TILE_GAP) + 1.05
+  const depth = rows * (TILE_DEPTH + TILE_GAP) + 2.15
 
   return (
     <group>
@@ -209,6 +213,94 @@ function TableSurface({ columns, rows }: { columns: number; rows: number }) {
       <mesh position={[0, -0.105, 0]} receiveShadow>
         <boxGeometry args={[width - 0.16, 0.04, depth - 0.16]} />
         <meshStandardMaterial color="#5a3825" roughness={0.98} />
+      </mesh>
+    </group>
+  )
+}
+
+function DicePair({ dice, reducedMotion, rollId, rows }: { dice?: { first: number; second: number }; reducedMotion: boolean; rollId?: string; rows: number }) {
+  if (!dice) return null
+  const boardDepth = (rows - 1) * (TILE_DEPTH + TILE_GAP)
+
+  return (
+    <group position={[0, 0.19, boardDepth / 2 + 0.75]}>
+      <mesh position={[0, -0.18, 0]} receiveShadow>
+        <boxGeometry args={[1.55, 0.08, 0.82]} />
+        <meshStandardMaterial color="#2b1b13" roughness={0.92} />
+      </mesh>
+      <mesh position={[0, -0.132, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.66, 0.72, 4]} />
+        <meshBasicMaterial color="#d99b1d" toneMapped={false} />
+      </mesh>
+      <Die direction={1} position={[-0.34, 0, 0]} reducedMotion={reducedMotion} rollId={rollId} value={dice.first} />
+      <Die direction={-1} position={[0.34, 0, 0]} reducedMotion={reducedMotion} rollId={rollId} value={dice.second} />
+    </group>
+  )
+}
+
+function Die({ direction, position, reducedMotion, rollId, value }: { direction: number; position: [number, number, number]; reducedMotion: boolean; rollId?: string; value: number }) {
+  const die = useRef<Group>(null)
+  const { invalidate } = useThree()
+  const animation = useRef<{ elapsed: number } | null>(null)
+  const geometry = useMemo(() => new RoundedBoxGeometry(0.48, 0.48, 0.48, 4, 0.055), [])
+  const faceValues = useMemo(() => dieFaceValues(value), [value])
+  const textures = useMemo(() => faceValues.map(createDieFaceTexture), [faceValues])
+  const [restX, restY, restZ] = position
+
+  useEffect(() => () => {
+    geometry.dispose()
+    for (const texture of textures) texture.dispose()
+  }, [geometry, textures])
+
+  useEffect(() => {
+    if (!die.current || !rollId) return
+    if (reducedMotion) {
+      die.current.position.set(restX, restY, restZ)
+      die.current.rotation.set(0, 0, 0)
+      die.current.scale.set(1, 1, 1)
+      invalidate()
+      return
+    }
+    animation.current = { elapsed: 0 }
+    invalidate()
+  }, [invalidate, reducedMotion, restX, restY, restZ, rollId, value])
+
+  useFrame((_, delta) => {
+    if (!die.current || !animation.current) return
+    const duration = 1.05
+    const motion = animation.current
+    motion.elapsed += Math.min(delta, 0.05)
+    const progress = Math.min(motion.elapsed / duration, 1)
+    const eased = 1 - Math.pow(1 - progress, 3)
+    const mainArc = progress < 0.72 ? Math.sin(progress / 0.72 * Math.PI) * 0.9 : 0
+    const landingProgress = Math.max(0, (progress - 0.72) / 0.28)
+    const bounce = progress >= 0.72 ? Math.abs(Math.sin(landingProgress * Math.PI * 2)) * 0.17 * (1 - landingProgress) : 0
+    die.current.position.set(
+      restX + Math.sin(progress * Math.PI * 5) * 0.13 * (1 - progress) * direction,
+      restY + mainArc + bounce,
+      restZ + Math.cos(progress * Math.PI * 4) * 0.08 * (1 - progress),
+    )
+    die.current.rotation.set(
+      (1 - eased) * Math.PI * 4.5 * direction,
+      (1 - eased) * Math.PI * 3.5,
+      (1 - eased) * Math.PI * 3 * -direction,
+    )
+    const squash = Math.sin(landingProgress * Math.PI) * 0.08 * (progress >= 0.72 ? 1 : 0)
+    die.current.scale.set(1 + squash, 1 - squash, 1 + squash)
+    if (progress >= 1) {
+      die.current.position.set(restX, restY, restZ)
+      die.current.rotation.set(0, 0, 0)
+      die.current.scale.set(1, 1, 1)
+      animation.current = null
+      return
+    }
+    invalidate()
+  })
+
+  return (
+    <group ref={die} position={position}>
+      <mesh castShadow receiveShadow geometry={geometry}>
+        {textures.map((texture, index) => <meshStandardMaterial key={index} attach={`material-${index}`} color={PAPER} map={texture} metalness={0.02} roughness={0.48} />)}
       </mesh>
     </group>
   )
@@ -501,6 +593,41 @@ function createBadgeTexture(label: string) {
   context.textBaseline = 'middle'
   context.font = '900 80px Georgia'
   context.fillText(label, 64, 67)
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  return texture
+}
+
+function dieFaceValues(topValue: number) {
+  const opposite = 7 - topValue
+  const available = [1, 2, 3, 4, 5, 6].filter((value) => value !== topValue && value !== opposite)
+  const firstSide = available[0]
+  const secondSide = available.find((value) => value !== firstSide && value !== 7 - firstSide) ?? available[1]
+  return [firstSide, 7 - firstSide, topValue, opposite, secondSide, 7 - secondSide]
+}
+
+function createDieFaceTexture(value: number) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 256
+  const context = canvas.getContext('2d')
+  if (!context) return new CanvasTexture(canvas)
+  context.fillStyle = PAPER
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.fillStyle = INK
+  const points: Record<number, Array<[number, number]>> = {
+    1: [[128, 128]],
+    2: [[72, 72], [184, 184]],
+    3: [[72, 72], [128, 128], [184, 184]],
+    4: [[72, 72], [184, 72], [72, 184], [184, 184]],
+    5: [[72, 72], [184, 72], [128, 128], [72, 184], [184, 184]],
+    6: [[72, 66], [184, 66], [72, 128], [184, 128], [72, 190], [184, 190]],
+  }
+  for (const [x, y] of points[value] ?? points[1]) {
+    context.beginPath()
+    context.arc(x, y, 22, 0, Math.PI * 2)
+    context.fill()
+  }
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
   return texture

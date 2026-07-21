@@ -241,7 +241,7 @@ function TeamCockpit({ lobby, isMyTurn }: { lobby: Exclude<TeamLobby, null | und
       </div>
       <span className={`shrink-0 rounded-full px-2.5 py-1 text-[0.56rem] font-black uppercase tracking-[0.1em] ${isMyTurn ? 'bg-saffron text-ink' : 'bg-paper/12 text-paper/75'}`}>{isMyTurn ? 'Tu turno' : 'En juego'}</span>
     </div>
-    <div className="mt-3 grid grid-cols-3 gap-1.5"><span className="rounded-xl bg-paper px-2 py-1.5 text-center text-sm font-black text-ink">${lobby.self.money}</span><span className="rounded-xl bg-saffron px-2 py-1.5 text-center text-sm font-black text-ink">{selfTeam?.coins ?? 0} {(selfTeam?.coins ?? 0) === 1 ? 'moneda' : 'monedas'}</span><span className="rounded-xl bg-paper/12 px-2 py-1.5 text-center text-sm font-bold text-paper/80">Dado {lobby.lastRoll ?? '—'}</span></div>
+    <div className="mt-3 grid grid-cols-3 gap-1.5"><span className="rounded-xl bg-paper px-2 py-1.5 text-center text-sm font-black text-ink">${lobby.self.money}</span><span className="rounded-xl bg-saffron px-2 py-1.5 text-center text-sm font-black text-ink">{selfTeam?.coins ?? 0} {(selfTeam?.coins ?? 0) === 1 ? 'moneda' : 'monedas'}</span><span className="rounded-xl bg-paper/12 px-2 py-1.5 text-center text-sm font-bold text-paper/80">Dados {lobby.lastDice ? `${lobby.lastDice.first}+${lobby.lastDice.second}` : '—'}</span></div>
     <p className="mt-3 border-t border-paper/12 pt-2 text-xs font-semibold leading-snug text-paper/80">{activity}</p>
   </header>
 }
@@ -530,6 +530,7 @@ type Team = { id: Id<'teams'>; coins: number; color: string; isHost: boolean; jo
 type TeamLobby = {
   code: string
   phase: 'lobby' | 'active' | 'finished'
+  lastDice?: { first: number; second: number }
   lastRoll?: number
   round?: {
     category: 'sequence' | 'association' | 'common' | 'approximation'

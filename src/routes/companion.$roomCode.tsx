@@ -127,7 +127,7 @@ function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: C
   const resultModalExiting = exitingResultRoundId === resolvedRoundId
   const cardIsOnTable = Boolean(lobby.round && lobby.roundState && (lobby.round.phase !== 'resolved' || resultModalVisible))
   const hasSeenRoll = useRef(false)
-  const previousRoll = useRef<number | undefined>(undefined)
+  const previousRollId = useRef<string | undefined>(undefined)
   const hasSeenPosition = useRef(false)
   const previousPositionKey = useRef('')
   const hasSeenRound = useRef(false)
@@ -137,15 +137,15 @@ function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: C
   const previousCoinKey = useRef('')
 
   useEffect(() => {
-    const lastRoll = lobby.lastRoll
+    const lastRollId = lobby.lastRollId
     if (!hasSeenRoll.current) {
       hasSeenRoll.current = true
-      previousRoll.current = lastRoll
+      previousRollId.current = lastRollId
       return
     }
-    if (lastRoll !== undefined && previousRoll.current !== lastRoll) playSound('diceRoll')
-    previousRoll.current = lastRoll
-  }, [lobby.lastRoll, playSound])
+    if (lastRollId && previousRollId.current !== lastRollId) playSound('diceRoll')
+    previousRollId.current = lastRollId
+  }, [lobby.lastRollId, playSound])
 
   useEffect(() => {
     const positionKey = lobby.teams.map((team) => `${team.id}:${team.position}`).join('|')
@@ -225,7 +225,7 @@ function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: C
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-mint">Sala {lobby.code} · partida en curso</p>
             <h1 className="mt-1 font-display text-3xl tracking-[-0.05em] lg:text-4xl">La mesa está servida.</h1>
           </div>
-          <div className="flex items-center gap-2"><SoundControl enabled={soundEnabled} onClick={onToggleSound} /><DiceRoll value={lobby.lastRoll} /></div>
+          <div className="flex items-center gap-2"><SoundControl enabled={soundEnabled} onClick={onToggleSound} /><DiceRoll dice={lobby.lastDice} value={lobby.lastRoll} /></div>
         </div>
 
         <div className="mt-5 overflow-hidden rounded-[1.65rem] border border-paper/10 bg-ink/35">
@@ -257,8 +257,8 @@ function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: C
   )
 }
 
-function DiceRoll({ value }: { value?: number }) {
-  return <p aria-live="polite" className="flex items-center gap-2 rounded-full bg-saffron px-3 py-1.5 text-sm font-black text-ink"><span className="text-ink/70">Tirada</span><span key={value ?? 'empty'} className="companion-dice-roll grid h-7 min-w-7 place-items-center rounded-lg bg-ink px-1 text-paper shadow-[0_2px_0_rgb(0_0_0_/_0.22)]">{value ?? '—'}</span></p>
+function DiceRoll({ dice, value }: { dice?: { first: number; second: number }; value?: number }) {
+  return <p aria-live="polite" aria-label={dice ? `Tirada: ${dice.first} más ${dice.second}, total ${value}` : 'Todavía no hubo Tirada'} className="flex items-center gap-1.5 rounded-full bg-saffron px-3 py-1.5 text-sm font-black text-ink"><span className="mr-0.5 text-ink/70">Tirada</span>{dice ? <><span className="companion-dice-roll grid h-7 w-7 place-items-center rounded-lg bg-paper text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.22)]">{dice.first}</span><span className="companion-dice-roll grid h-7 w-7 place-items-center rounded-lg bg-paper text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.22)]">{dice.second}</span><span className="text-ink/55">=</span></> : null}<span key={value ?? 'empty'} className="grid h-7 min-w-7 place-items-center rounded-lg bg-ink px-1 text-paper shadow-[0_2px_0_rgb(0_0_0_/_0.22)]">{value ?? '—'}</span></p>
 }
 
 function RoundStatus({ lobby }: { lobby: CompanionLobby }) {
@@ -306,7 +306,7 @@ function ActiveCardModal({ exiting, round, state, teams }: { exiting: boolean; r
 }
 
 function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean }) {
-  return <Board3D activeTeamId={lobby.turnTeamId} board={lobby.board} dimmed={dimmed} teams={lobby.teams} />
+  return <Board3D activeTeamId={lobby.turnTeamId} board={lobby.board} dice={lobby.lastDice} dimmed={dimmed} rollId={lobby.lastRollId} teams={lobby.teams} />
 }
 
 function MetricsToast({ category, teams, exiting }: { category: keyof typeof CATEGORY_LABELS; teams: CompanionLobby['teams']; exiting: boolean }) {
@@ -379,7 +379,9 @@ function roundMessage(round: NonNullable<CompanionLobby['round']>, teams: Compan
 type CompanionLobby = {
   board: Array<{ category: 'sequence' | 'association' | 'common' | 'approximation'; isShop: boolean; maxBet: number }>
   code: string
+  lastDice?: { first: number; second: number }
   lastRoll?: number
+  lastRollId?: string
   phase: 'lobby' | 'active' | 'finished'
   round?: {
     category: 'sequence' | 'association' | 'common' | 'approximation'

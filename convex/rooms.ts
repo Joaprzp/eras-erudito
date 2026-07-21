@@ -129,7 +129,9 @@ export const companionLobby = query({
     return {
       board: room.board ?? [],
       code: room.code,
+      lastDice: room.lastDice,
       lastRoll: room.lastRoll,
+      lastRollId: room.lastRollId,
       phase: room.phase,
       round: room.round,
       roundState,
@@ -178,6 +180,7 @@ export const teamLobby = query({
 
     return {
       code: room.code,
+      lastDice: room.lastDice,
       lastRoll: room.lastRoll,
       phase: room.phase,
       round: room.round,
@@ -225,7 +228,9 @@ export const start = mutation({
 
     await ctx.db.patch(room._id, {
       board,
+      lastDice: undefined,
       lastRoll: undefined,
+      lastRollId: undefined,
       phase: 'active',
       turnTeamId: teams[0]._id,
       usedCardIds: [],
@@ -265,7 +270,9 @@ export const roll = mutation({
       throw new Error('Primero resolvé la ronda que ya está en juego.')
     }
 
-    const total = rollDie() + rollDie()
+    const firstDie = rollDie()
+    const secondDie = rollDie()
+    const total = firstDie + secondDie
     const previousPosition = team.position ?? 0
     const rawPosition = previousPosition + total
     const position = rawPosition % 54
@@ -282,7 +289,9 @@ export const roll = mutation({
       return { position, total }
     }
     await ctx.db.patch(room._id, {
+      lastDice: { first: firstDie, second: secondDie },
       lastRoll: total,
+      lastRollId: crypto.randomUUID(),
       round: {
         category: landedOnStart ? 'sequence' : space!.category,
         challengerId: team._id,
@@ -506,7 +515,7 @@ export const advanceTurn = mutation({
     if (!team.isHost) throw new Error('Solo el anfitrión puede continuar la partida.')
     if (room.round?.phase !== 'resolved') throw new Error('Primero hay que resolver esta ronda.')
 
-    await ctx.db.patch(room._id, { lastRoll: undefined, round: undefined, shopTeamId: undefined, lastActivityAt: Date.now() })
+    await ctx.db.patch(room._id, { lastDice: undefined, lastRoll: undefined, lastRollId: undefined, round: undefined, shopTeamId: undefined, lastActivityAt: Date.now() })
   },
 })
 
