@@ -306,7 +306,7 @@ function ActiveCardModal({ exiting, round, state, teams }: { exiting: boolean; r
 }
 
 function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean }) {
-  return <Board3D board={lobby.board} dimmed={dimmed} teams={lobby.teams} />
+  return <Board3D activeTeamId={lobby.turnTeamId} board={lobby.board} dimmed={dimmed} teams={lobby.teams} />
 }
 
 function MetricsToast({ category, teams, exiting }: { category: keyof typeof CATEGORY_LABELS; teams: CompanionLobby['teams']; exiting: boolean }) {

@@ -21,12 +21,14 @@ export type BoardTeam = {
   id: string
   coins: number
   color: string
+  joinIndex: number
   money: number
   name: string
   position: number
 }
 
 type Board3DProps = {
+  activeTeamId?: string
   board: BoardSpace[]
   dimmed: boolean
   teams: BoardTeam[]
@@ -49,7 +51,7 @@ const CATEGORY_COLORS: Record<BoardCategory, string> = {
 const INK = '#21160f'
 const PAPER = '#f7efd9'
 
-export function Board3D({ board, dimmed, teams }: Board3DProps) {
+export function Board3D({ activeTeamId, board, dimmed, teams }: Board3DProps) {
   const [contextLost, setContextLost] = useState(false)
 
   return (
@@ -65,7 +67,7 @@ export function Board3D({ board, dimmed, teams }: Board3DProps) {
             gl={{ alpha: false, antialias: true, powerPreference: 'default' }}
             shadows="basic"
           >
-            <BoardScene board={board} teams={teams} onContextLost={setContextLost} />
+            <BoardScene activeTeamId={activeTeamId} board={board} teams={teams} onContextLost={setContextLost} />
           </Canvas>
         </div>
       </BoardSceneErrorBoundary>
@@ -76,7 +78,7 @@ export function Board3D({ board, dimmed, teams }: Board3DProps) {
   )
 }
 
-function BoardScene({ board, onContextLost, teams }: { board: BoardSpace[]; onContextLost: (lost: boolean) => void; teams: BoardTeam[] }) {
+function BoardScene({ activeTeamId, board, onContextLost, teams }: { activeTeamId?: string; board: BoardSpace[]; onContextLost: (lost: boolean) => void; teams: BoardTeam[] }) {
   const { size } = useThree()
   const columns = size.width < 640 ? 9 : 14
   const layout = useMemo(() => createBoardLayout(columns), [columns])
@@ -110,6 +112,7 @@ function BoardScene({ board, onContextLost, teams }: { board: BoardSpace[]; onCo
 
       <group rotation={[0, -0.015, 0]}>
         <TableSurface columns={columns} rows={layout.rows} />
+        <PathLinks positions={layout.positions} />
         {layout.positions.map((position, index) => (
           <BoardTile
             key={index}
@@ -123,11 +126,13 @@ function BoardScene({ board, onContextLost, teams }: { board: BoardSpace[]; onCo
           return (
             <TeamPawn
               key={`${team.id}:${columns}`}
+              active={team.id === activeTeamId}
               layout={layout.positions}
               reducedMotion={reducedMotion}
               slotCount={colocated.length}
               slotIndex={colocated.findIndex((item) => item.id === team.id)}
               team={team}
+              variant={team.joinIndex % 4}
             />
           )
         })}
@@ -209,17 +214,41 @@ function TableSurface({ columns, rows }: { columns: number; rows: number }) {
   )
 }
 
+function PathLinks({ positions }: { positions: Vector3[] }) {
+  return (
+    <group>
+      {positions.slice(0, -1).map((from, index) => {
+        const to = positions[index + 1]
+        const horizontal = Math.abs(to.x - from.x) > Math.abs(to.z - from.z)
+        const length = horizontal ? Math.abs(to.x - from.x) : Math.abs(to.z - from.z)
+        return (
+          <mesh key={index} position={[(from.x + to.x) / 2, -0.015, (from.z + to.z) / 2]} receiveShadow>
+            <boxGeometry args={horizontal ? [length, 0.055, 0.18] : [0.18, 0.055, length]} />
+            <meshStandardMaterial color="#d99b1d" metalness={0.12} roughness={0.65} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
 function BoardTile({ index, position, space }: { index: number; position: Vector3; space?: BoardSpace }) {
   const isStart = index === 0
   const color = isStart ? PAPER : CATEGORY_COLORS[space!.category]
-  const texture = useMemo(() => createTileTexture(isStart ? 'INICIO' : `$${space!.maxBet}`, space?.isShop ?? false), [isStart, space])
+  const texture = useMemo(() => createTileTexture(isStart ? 'INICIO' : `$${space!.maxBet}`), [isStart, space])
 
   useEffect(() => () => texture.dispose(), [texture])
 
   return (
     <group position={[position.x, 0, position.z]}>
+      {isStart ? <StartGate /> : null}
+      {space?.isShop ? <ShopMarker /> : null}
+      <mesh castShadow receiveShadow position={[0, isStart ? -0.005 : 0, 0]}>
+        <boxGeometry args={[isStart ? TILE_WIDTH + 0.11 : TILE_WIDTH, 0.11, isStart ? TILE_DEPTH + 0.11 : TILE_DEPTH]} />
+        <meshStandardMaterial color={isStart ? '#d99b1d' : INK} metalness={isStart ? 0.14 : 0} roughness={0.72} />
+      </mesh>
       <mesh castShadow receiveShadow position={[0, 0.04, 0]}>
-        <boxGeometry args={[TILE_WIDTH, 0.2, TILE_DEPTH]} />
+        <boxGeometry args={[isStart ? TILE_WIDTH - 0.06 : TILE_WIDTH - 0.035, isStart ? 0.23 : 0.2, isStart ? TILE_DEPTH - 0.06 : TILE_DEPTH - 0.035]} />
         <meshStandardMaterial color={color} roughness={0.74} />
       </mesh>
       <mesh position={[0, 0.146, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -230,12 +259,53 @@ function BoardTile({ index, position, space }: { index: number; position: Vector
   )
 }
 
-function TeamPawn({ layout, reducedMotion, slotCount, slotIndex, team }: { layout: Vector3[]; reducedMotion: boolean; slotCount: number; slotIndex: number; team: BoardTeam }) {
+function StartGate() {
+  return (
+    <group position={[0, 0, TILE_DEPTH * 0.42]}>
+      <mesh castShadow position={[-0.43, 0.34, 0]}>
+        <cylinderGeometry args={[0.045, 0.06, 0.58, 12]} />
+        <meshStandardMaterial color="#d99b1d" metalness={0.25} roughness={0.48} />
+      </mesh>
+      <mesh castShadow position={[0.43, 0.34, 0]}>
+        <cylinderGeometry args={[0.045, 0.06, 0.58, 12]} />
+        <meshStandardMaterial color="#d99b1d" metalness={0.25} roughness={0.48} />
+      </mesh>
+      <mesh castShadow position={[0, 0.62, 0]}>
+        <boxGeometry args={[0.92, 0.09, 0.08]} />
+        <meshStandardMaterial color="#d99b1d" metalness={0.25} roughness={0.48} />
+      </mesh>
+    </group>
+  )
+}
+
+function ShopMarker() {
+  const texture = useMemo(() => createBadgeTexture('E'), [])
+
+  useEffect(() => () => texture.dispose(), [texture])
+
+  return (
+    <group position={[0.36, 0.26, -0.2]}>
+      <mesh castShadow>
+        <cylinderGeometry args={[0.14, 0.14, 0.12, 20]} />
+        <meshStandardMaterial color={INK} metalness={0.08} roughness={0.45} />
+      </mesh>
+      <mesh position={[0, 0.066, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.105, 20]} />
+        <meshBasicMaterial map={texture} transparent toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
+function TeamPawn({ active, layout, reducedMotion, slotCount, slotIndex, team, variant }: { active: boolean; layout: Vector3[]; reducedMotion: boolean; slotCount: number; slotIndex: number; team: BoardTeam; variant: number }) {
   const pawn = useRef<Group>(null)
   const { invalidate } = useThree()
   const logicalPosition = useRef(team.position)
   const animation = useRef<{ elapsed: number; from: number; steps: number } | null>(null)
   const slotOffset = pawnSlot(slotIndex, slotCount)
+  const monogram = useMemo(() => createMonogramTexture(team.name), [team.name])
+
+  useEffect(() => () => monogram.dispose(), [monogram])
 
   useEffect(() => {
     const previous = logicalPosition.current
@@ -254,7 +324,7 @@ function TeamPawn({ layout, reducedMotion, slotCount, slotIndex, team }: { layou
 
   useFrame((_, delta) => {
     if (!pawn.current || !animation.current) return
-    const durationPerSpace = 0.105
+    const durationPerSpace = 0.13
     const motion = animation.current
     motion.elapsed += Math.min(delta, 0.05)
     const rawProgress = motion.elapsed / durationPerSpace
@@ -270,11 +340,14 @@ function TeamPawn({ layout, reducedMotion, slotCount, slotIndex, team }: { layou
       0.38 + Math.sin(segmentProgress * Math.PI) * 0.34,
       MathUtils.lerp(from.z, to.z, eased) + slotOffset.z,
     )
-    pawn.current.rotation.y += delta * 3.2
+    const lift = Math.sin(segmentProgress * Math.PI)
+    pawn.current.scale.set(1 - lift * 0.07, 1 + lift * 0.14, 1 - lift * 0.07)
+    pawn.current.rotation.y += delta * 4.4
     if (rawProgress >= motion.steps) {
       const target = layout[team.position]
       pawn.current.position.set(target.x + slotOffset.x, 0.38, target.z + slotOffset.z)
       pawn.current.rotation.y = 0
+      pawn.current.scale.set(1, 1, 1)
       animation.current = null
       return
     }
@@ -284,20 +357,37 @@ function TeamPawn({ layout, reducedMotion, slotCount, slotIndex, team }: { layou
   const initial = layout[team.position]
   return (
     <group ref={pawn} position={[initial.x + slotOffset.x, 0.38, initial.z + slotOffset.z]}>
+      {active ? <mesh position={[0, -0.225, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.31, 0.025, 8, 28]} /><meshBasicMaterial color="#f2bd2e" toneMapped={false} /></mesh> : null}
+      <mesh position={[0.1, -0.19, 0.11]} receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.2, 20]} />
+        <meshBasicMaterial color="#140d09" transparent opacity={0.24} depthWrite={false} />
+      </mesh>
       <mesh castShadow position={[0, 0.24, 0]}>
         <sphereGeometry args={[0.17, 20, 14]} />
         <meshStandardMaterial color={team.color} metalness={0.08} roughness={0.3} />
       </mesh>
+      <mesh position={[0, 0.414, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.115, 24]} />
+        <meshBasicMaterial map={monogram} transparent toneMapped={false} />
+      </mesh>
       <mesh castShadow position={[0, -0.02, 0]}>
-        <cylinderGeometry args={[0.12, 0.23, 0.38, 20]} />
+        <cylinderGeometry args={[0.12, 0.23, 0.38, variant === 1 ? 4 : variant === 2 ? 6 : variant === 3 ? 3 : 20]} />
         <meshStandardMaterial color={team.color} metalness={0.08} roughness={0.32} />
       </mesh>
-      <mesh castShadow position={[0, -0.23, 0]}>
-        <cylinderGeometry args={[0.25, 0.25, 0.08, 24]} />
+      <mesh castShadow position={[0, -0.23, 0]} rotation={[0, variant === 1 ? Math.PI / 4 : 0, 0]}>
+        <cylinderGeometry args={[0.25, 0.25, 0.08, variant === 1 ? 4 : variant === 2 ? 6 : variant === 3 ? 3 : 24]} />
         <meshStandardMaterial color={team.color} metalness={0.06} roughness={0.34} />
       </mesh>
+      <CoinStuds count={team.coins} />
     </group>
   )
+}
+
+function CoinStuds({ count }: { count: number }) {
+  return Array.from({ length: Math.min(count, 4) }, (_, index) => {
+    const angle = index / 4 * Math.PI * 2 + Math.PI / 4
+    return <mesh key={index} position={[Math.cos(angle) * 0.2, -0.17, Math.sin(angle) * 0.2]} castShadow><sphereGeometry args={[0.045, 10, 8]} /><meshStandardMaterial color="#f2bd2e" metalness={0.35} roughness={0.35} /></mesh>
+  })
 }
 
 function BoardAccessibleState({ board, teams }: { board: BoardSpace[]; teams: BoardTeam[] }) {
@@ -354,7 +444,7 @@ function createBoardLayout(columns: number) {
   return { positions, rows }
 }
 
-function createTileTexture(label: string, shop: boolean) {
+function createTileTexture(label: string) {
   const canvas = document.createElement('canvas')
   canvas.width = 256
   canvas.height = 160
@@ -366,16 +456,51 @@ function createTileTexture(label: string, shop: boolean) {
   context.textBaseline = 'top'
   context.font = label === 'INICIO' ? '900 43px Georgia' : '900 48px sans-serif'
   context.fillText(label, 14, 16)
-  if (shop) {
-    context.beginPath()
-    context.arc(211, 49, 31, 0, Math.PI * 2)
-    context.fill()
-    context.fillStyle = '#e5ad22'
-    context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.font = '900 37px sans-serif'
-    context.fillText('E', 211, 50)
-  }
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  return texture
+}
+
+function createMonogramTexture(name: string) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 128
+  canvas.height = 128
+  const context = canvas.getContext('2d')
+  if (!context) return new CanvasTexture(canvas)
+  context.clearRect(0, 0, canvas.width, canvas.height)
+  context.beginPath()
+  context.arc(64, 64, 58, 0, Math.PI * 2)
+  context.fillStyle = PAPER
+  context.fill()
+  context.lineWidth = 7
+  context.strokeStyle = INK
+  context.stroke()
+  context.fillStyle = INK
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.font = '900 72px Georgia'
+  context.fillText(name.trim().slice(0, 1).toUpperCase() || '?', 64, 68)
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  return texture
+}
+
+function createBadgeTexture(label: string) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 128
+  canvas.height = 128
+  const context = canvas.getContext('2d')
+  if (!context) return new CanvasTexture(canvas)
+  context.clearRect(0, 0, canvas.width, canvas.height)
+  context.beginPath()
+  context.arc(64, 64, 60, 0, Math.PI * 2)
+  context.fillStyle = '#e5ad22'
+  context.fill()
+  context.fillStyle = INK
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.font = '900 80px Georgia'
+  context.fillText(label, 64, 67)
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
   return texture
