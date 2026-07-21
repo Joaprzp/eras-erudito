@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
-import { ArrowUpRight, BookOpenText, Dices, QrCode, Sparkles, Trophy } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { ArrowRight, ArrowUpRight, BookOpenText, Dices, QrCode, Sparkles, Trophy, X } from 'lucide-react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 
 import { api } from '../../convex/_generated/api'
 
@@ -13,6 +13,9 @@ function WelcomePage() {
   const createRoom = useMutation(api.rooms.create)
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
+  const [isCodeEntryOpen, setIsCodeEntryOpen] = useState(false)
+  const [roomCode, setRoomCode] = useState('')
+  const [codeError, setCodeError] = useState<string | null>(null)
 
   async function handleCreateRoom() {
     setIsCreating(true)
@@ -27,6 +30,19 @@ function WelcomePage() {
     } finally {
       setIsCreating(false)
     }
+  }
+
+  async function handleEnterWithCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const normalizedCode = roomCode.trim().toUpperCase().replaceAll(/[^A-Z0-9]/g, '')
+
+    if (normalizedCode.length !== 6) {
+      setCodeError('El código de sala tiene seis caracteres.')
+      return
+    }
+
+    setCodeError(null)
+    await navigate({ to: '/team/$roomCode', params: { roomCode: normalizedCode } })
   }
 
   return (
@@ -70,11 +86,46 @@ function WelcomePage() {
                 {isCreating ? 'Creando sala…' : 'Crear una partida'}
                 <ArrowUpRight size={17} className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </button>
-              <button className="inline-flex items-center gap-2 rounded-full border border-paper/30 px-5 py-3 text-sm font-semibold text-paper transition-colors hover:border-paper hover:bg-paper/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-paper">
+              <button
+                type="button"
+                aria-expanded={isCodeEntryOpen}
+                aria-controls="room-code-entry"
+                className="inline-flex items-center gap-2 rounded-full border border-paper/30 px-5 py-3 text-sm font-semibold text-paper transition-colors hover:border-paper hover:bg-paper/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-paper"
+                onClick={() => {
+                  setIsCodeEntryOpen((isOpen) => !isOpen)
+                  setCodeError(null)
+                }}
+              >
                 <QrCode size={17} />
                 Entrar con código
               </button>
             </div>
+            {isCodeEntryOpen ? (
+              <form id="room-code-entry" className="mt-4 max-w-md rounded-[1.35rem] border border-paper/25 bg-paper/8 p-3 shadow-[0_1rem_2.5rem_rgb(0_0_0_/_0.14)]" onSubmit={handleEnterWithCode}>
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="room-code" className="text-[0.62rem] font-black uppercase tracking-[0.2em] text-mint">Código de sala</label>
+                  <button type="button" className="rounded-full p-1 text-paper/55 transition-colors hover:bg-paper/10 hover:text-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper" aria-label="Cerrar entrada por código" onClick={() => setIsCodeEntryOpen(false)}><X size={16} /></button>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    id="room-code"
+                    autoFocus
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    className="min-w-0 flex-1 rounded-xl border border-paper/30 bg-ink/55 px-3 py-2.5 font-mono text-lg font-black uppercase tracking-[0.2em] text-paper outline-none placeholder:tracking-normal placeholder:text-paper/35 focus:border-mint"
+                    maxLength={6}
+                    placeholder="ABC123"
+                    value={roomCode}
+                    onChange={(event) => {
+                      setRoomCode(event.target.value.toUpperCase().replaceAll(/[^A-Z0-9]/g, ''))
+                      setCodeError(null)
+                    }}
+                  />
+                  <button type="submit" className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-mint px-3 text-sm font-black text-ink transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mint">Entrar <ArrowRight size={16} /></button>
+                </div>
+                <p className={`mt-2 text-xs font-semibold ${codeError ? 'text-coral' : 'text-paper/60'}`}>{codeError ?? 'Escaneá el QR o escribí el código que aparece en la pantalla companion.'}</p>
+              </form>
+            ) : null}
           </div>
 
           <aside className="relative mx-auto w-full max-w-md rotate-[-2deg] rounded-[1.8rem] bg-paper p-3 text-ink shadow-[1.3rem_1.3rem_0_0_rgb(242_97_73)] transition-transform duration-500 hover:rotate-0">
