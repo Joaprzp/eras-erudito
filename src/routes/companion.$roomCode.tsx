@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { QRCodeSVG } from 'qrcode.react'
 
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
+import { Board3D } from '../components/board-3d'
 
 export const Route = createFileRoute('/companion/$roomCode')({
   validateSearch: (search) => ({
@@ -305,104 +306,7 @@ function ActiveCardModal({ exiting, round, state, teams }: { exiting: boolean; r
 }
 
 function BoardStrip({ lobby, dimmed }: { lobby: CompanionLobby; dimmed: boolean }) {
-  return (
-    <div className={`p-3 transition duration-500 sm:p-5 lg:p-7 ${dimmed ? 'opacity-35 blur-[1px]' : ''}`}>
-      <div className="relative">
-        <BoardGrid className="sm:hidden" columns={9} lobby={lobby} />
-        <BoardGrid className="hidden sm:grid" columns={14} lobby={lobby} />
-        <BoardDirectionLayer className="sm:hidden" columns={9} spaceCount={lobby.board.length + 1} />
-        <BoardDirectionLayer className="hidden sm:grid" columns={14} spaceCount={lobby.board.length + 1} />
-        <TeamTokenLayer className="sm:hidden" columns={9} teams={lobby.teams} />
-        <TeamTokenLayer className="hidden sm:grid" columns={14} teams={lobby.teams} />
-      </div>
-      {dimmed ? <p className="mt-5 text-center text-[0.58rem] font-black uppercase tracking-[0.22em] text-paper/60">Tablero en pausa · la tarjeta está en juego</p> : null}
-    </div>
-  )
-}
-
-function BoardGrid({ className, columns, lobby }: { className: string; columns: number; lobby: CompanionLobby }) {
-  const cells = [{ category: undefined, label: 'Inicio', shop: false }, ...lobby.board.map((space) => ({ category: space.category, label: `$${space.maxBet}`, shop: space.isShop }))]
-
-  return <div className={`grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9 grid-rows-6' : 'grid-cols-14 grid-rows-4'} ${className}`}>{cells.map((cell, index) => {
-    const position = boardGridPosition(index, columns)
-    return <BoardCell key={index} category={cell.category} gridColumn={position.column} gridRow={position.row} label={cell.label} shop={cell.shop} />
-  })}</div>
-}
-
-function BoardDirectionLayer({ className, columns, spaceCount }: { className: string; columns: number; spaceCount: number }) {
-  const rows = Math.ceil(spaceCount / columns)
-
-  return <div aria-hidden="true" className={`pointer-events-none absolute inset-0 z-[5] grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9 grid-rows-6' : 'grid-cols-14 grid-rows-4'} ${className}`}>{Array.from({ length: rows }, (_, row) => {
-    const movesRight = row % 2 === 0
-    const entryColumn = movesRight ? 1 : columns
-    return <span key={row} className="relative" style={{ gridColumn: entryColumn, gridRow: row + 1 }}><span className={`absolute top-1/2 z-20 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full border border-paper/25 bg-ink/90 text-sm font-black text-saffron shadow-[0_2px_8px_rgb(0_0_0_/_0.28)] ${movesRight ? '-left-3' : '-right-3'}`}>{movesRight ? '→' : '←'}</span></span>
-  })}</div>
-}
-
-function boardGridPosition(position: number, columns: number) {
-  const row = Math.floor(position / columns)
-  const offset = position % columns
-  return { column: row % 2 === 0 ? offset + 1 : columns - offset, row: row + 1 }
-}
-
-function TeamTokenLayer({ className, columns, teams }: { className: string; columns: number; teams: CompanionLobby['teams'] }) {
-  const layerRef = useRef<HTMLDivElement>(null)
-  const previousRects = useRef<Map<string, DOMRect>>(new Map())
-  const layoutKey = teams.map((team) => `${team.id}:${team.position}`).join('|')
-  const teamsByPosition = new Map<number, CompanionLobby['teams']>()
-
-  for (const team of teams) {
-    const teamsAtPosition = teamsByPosition.get(team.position) ?? []
-    teamsAtPosition.push(team)
-    teamsByPosition.set(team.position, teamsAtPosition)
-  }
-
-  useLayoutEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !layerRef.current) return
-
-    const nextRects = new Map<string, DOMRect>()
-    for (const token of layerRef.current.querySelectorAll<HTMLElement>('[data-team-token]')) {
-      const teamId = token.dataset.teamToken
-      if (!teamId) continue
-
-      const nextRect = token.getBoundingClientRect()
-      const previousRect = previousRects.current.get(teamId)
-      if (previousRect) {
-        const x = previousRect.left - nextRect.left
-        const y = previousRect.top - nextRect.top
-        if (Math.abs(x) > 1 || Math.abs(y) > 1) {
-          token.animate([
-            { transform: `translate(${x}px, ${y}px) scale(0.82)` },
-            { transform: 'translate(0, 0) scale(1.08)', offset: 0.78 },
-            { transform: 'translate(0, 0) scale(1)' },
-          ], { duration: 1_050, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
-        }
-      }
-      nextRects.set(teamId, nextRect)
-    }
-    previousRects.current = nextRects
-  }, [layoutKey])
-
-  return <div ref={layerRef} className={`pointer-events-none absolute inset-0 z-10 grid gap-1.5 lg:gap-2 ${columns === 9 ? 'grid-cols-9 grid-rows-6' : 'grid-cols-14 grid-rows-4'} ${className}`}>
-    {Array.from(teamsByPosition.entries()).flatMap(([position, teamsAtPosition]) => teamsAtPosition.map((team, index) => {
-      const slot = tokenSlot(index, teamsAtPosition.length)
-      const gridPosition = boardGridPosition(position, columns)
-      return <span key={team.id} data-team-token={team.id} className="relative" style={{ gridColumn: gridPosition.column, gridRow: gridPosition.row }}><span title={team.name} className="absolute grid place-items-center rounded-[35%] border-2 border-ink/35 text-[clamp(0.5rem,1.25vw,1rem)] font-black text-ink shadow-[0_2px_0_rgb(0_0_0_/_0.25)]" style={{ backgroundColor: team.color, height: `${slot.height}%`, left: `${slot.left}%`, top: `${slot.top}%`, width: `${slot.width}%` }}>{team.name.slice(0, 1).toUpperCase()}</span></span>
-    }))}
-  </div>
-}
-
-function tokenSlot(index: number, count: number) {
-  if (count === 1) return { height: 68, left: 16, top: 16, width: 68 }
-  if (count === 2) return { height: 66, left: index === 0 ? 12 : 54, top: 17, width: 34 }
-
-  const slots = [
-    { height: 36, left: 12, top: 12, width: 36 },
-    { height: 36, left: 52, top: 12, width: 36 },
-    { height: 36, left: 12, top: 52, width: 36 },
-    { height: 36, left: 52, top: 52, width: 36 },
-  ]
-  return slots[index] ?? slots[0]
+  return <Board3D board={lobby.board} dimmed={dimmed} teams={lobby.teams} />
 }
 
 function MetricsToast({ category, teams, exiting }: { category: keyof typeof CATEGORY_LABELS; teams: CompanionLobby['teams']; exiting: boolean }) {
@@ -470,15 +374,6 @@ function roundMessage(round: NonNullable<CompanionLobby['round']>, teams: Compan
   if (round.phase === 'ready_to_reveal') return 'Todas las respuestas están listas.'
   if (round.phase === 'resolved') return 'Ronda resuelta.'
   return 'Tarjeta revelada.'
-}
-
-function BoardCell({ category, gridColumn, gridRow, label, shop = false }: { category?: string; gridColumn?: number; gridRow?: number; label: string; shop?: boolean }) {
-  const categoryClass = category === 'sequence' ? 'bg-coral' : category === 'association' ? 'bg-saffron' : category === 'common' ? 'bg-mint' : category === 'approximation' ? 'bg-sky-400' : 'bg-paper'
-
-  return <div className={`relative grid aspect-square min-w-0 place-items-center overflow-hidden rounded-md ${categoryClass} text-[0.5rem] font-black text-ink sm:text-[0.6rem]`} style={{ gridColumn, gridRow }}>
-    <span className="absolute left-[5%] top-[5%] z-20 rounded bg-paper/90 px-1.5 py-0.5 text-[0.58rem] leading-none shadow-sm sm:text-[0.68rem]">{label}</span>
-    {shop ? <span className="absolute right-[5%] top-[5%] z-20 grid h-5 w-5 place-items-center rounded-full bg-ink text-[0.58rem] text-saffron shadow-sm sm:h-6 sm:w-6 sm:text-[0.68rem]">E</span> : null}
-  </div>
 }
 
 type CompanionLobby = {
