@@ -25,7 +25,7 @@ La pantalla compartida que muestra el estado común de una Partida presencial mu
 _Avoid_: dispositivo de respuesta
 
 **Equipo**:
-El grupo de una o más personas que compite como una única parte en una partida. El MVP admite entre dos y cuatro Equipos, identificados por un nombre y un color único.
+El grupo de una o más personas que compite como una única parte en una partida. El MVP admite entre dos y seis Equipos, identificados por un nombre y un color único.
 _Avoid_: jugador individual
 
 **Sala**:

@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react'
 
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
+import { MAX_TEAMS } from '../../convex/constants'
 import { Board3D } from '../components/board-3d'
 
 export const Route = createFileRoute('/companion/$roomCode')({
@@ -167,7 +168,7 @@ function CompanionRoom() {
             <div>
               <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-saffron">Código para equipos</p>
               <p className="mt-2 font-display text-6xl tracking-[0.1em]">{lobby.code}</p>
-              <p className="mt-7 text-sm text-paper/60">{lobby.teams.length}/4 equipos en espera</p>
+              <p className="mt-7 text-sm text-paper/60">{lobby.teams.length}/{MAX_TEAMS} equipos en espera</p>
               <div className="mt-4 space-y-2">
                 {lobby.teams.map((team) => (
                   <div key={team.id} className="flex items-center gap-3 rounded-xl bg-paper/8 px-3 py-2">
@@ -333,7 +334,7 @@ function GameBoard({ lobby, onToggleSound, playSound, soundEnabled }: { lobby: C
         {lobby.round && !cardIsOnTable ? <RoundStatus lobby={lobby} /> : null}
         <section className="mt-5 rounded-[1.5rem] border border-paper/10 bg-ink/25 p-3 sm:p-4">
           <p className="px-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-paper/55">Equipos</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {lobby.teams.map((team) => (
               <div key={team.id} className="rounded-2xl border border-paper/10 bg-paper/8 p-3 sm:p-4">
                 <div className="flex items-center gap-2.5">

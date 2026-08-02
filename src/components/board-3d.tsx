@@ -201,7 +201,7 @@ function BoardScene({ activeTeamId, board, cloudsActive, dice, onContextLost, ro
               slotCount={colocated.length}
               slotIndex={colocated.findIndex((item) => item.id === team.id)}
               team={team}
-              variant={team.joinIndex % 4}
+              variant={team.joinIndex % PAWN_SIDES.length}
               winner={team.id === winnerTeamId}
             />
           )
@@ -779,11 +779,11 @@ function TeamPawn({ active, layout, onLanded, onMove, onMoveStart, reducedMotion
         <meshBasicMaterial map={monogram} transparent toneMapped={false} />
       </mesh>
       <mesh castShadow position={[0, -0.02, 0]}>
-        <cylinderGeometry args={[0.12, 0.23, 0.38, variant === 1 ? 4 : variant === 2 ? 6 : variant === 3 ? 3 : 20]} />
+        <cylinderGeometry args={[0.12, 0.23, 0.38, PAWN_SIDES[variant] ?? 20]} />
         <meshStandardMaterial color={team.color} metalness={0.08} roughness={0.32} />
       </mesh>
       <mesh castShadow position={[0, -0.23, 0]} rotation={[0, variant === 1 ? Math.PI / 4 : 0, 0]}>
-        <cylinderGeometry args={[0.25, 0.25, 0.08, variant === 1 ? 4 : variant === 2 ? 6 : variant === 3 ? 3 : 24]} />
+        <cylinderGeometry args={[0.25, 0.25, 0.08, PAWN_SIDES[variant] ?? 24]} />
         <meshStandardMaterial color={team.color} metalness={0.06} roughness={0.34} />
       </mesh>
       <CoinStuds count={team.coins} reducedMotion={reducedMotion} />
@@ -1065,12 +1065,17 @@ function createDieFaceTexture(value: number) {
   return texture
 }
 
+const PAWN_SIDES = [20, 4, 6, 3, 5, 8]
+
 function pawnSlot(index: number, count: number) {
   if (count <= 1) return { x: 0, z: 0 }
-  const slots = count === 2
-    ? [{ x: -0.2, z: 0 }, { x: 0.2, z: 0 }]
-    : [{ x: -0.2, z: -0.14 }, { x: 0.2, z: -0.14 }, { x: -0.2, z: 0.16 }, { x: 0.2, z: 0.16 }]
-  return slots[index] ?? slots[0]
+  if (count === 2) return index === 1 ? { x: 0.2, z: 0 } : { x: -0.2, z: 0 }
+
+  const columns = count > 4 ? 3 : 2
+  const step = columns === 3 ? 0.26 : 0.4
+  const column = index % columns
+
+  return { x: (column - (columns - 1) / 2) * step, z: index < columns ? -0.14 : 0.16 }
 }
 
 function teamStatus(team: BoardTeam, board: BoardSpace[]) {

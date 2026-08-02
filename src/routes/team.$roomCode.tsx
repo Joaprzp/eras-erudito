@@ -3,6 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { FormEvent, useEffect, useState } from 'react'
 
 import { api } from '../../convex/_generated/api'
+import { MAX_TEAMS } from '../../convex/constants'
 import type { Id } from '../../convex/_generated/dataModel'
 import { useSessionStore } from '../stores/session'
 
@@ -347,8 +348,8 @@ function LobbyPanel({
 
   return (
     <section className="mt-7 rounded-[1.8rem] border-2 border-ink p-5 text-left">
-      <div className="flex items-baseline justify-between gap-3"><p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-ink/60">Sala de espera</p><p className="text-sm font-black">{lobby.teams.length}/4</p></div>
-      <p className="mt-2 text-sm font-semibold text-ink/60">{lobby.teams.length < 2 ? 'Falta al menos un equipo para empezar.' : lobby.teams.length < 4 ? `Pueden entrar ${4 - lobby.teams.length} equipos más.` : 'La mesa está completa.'}</p>
+      <div className="flex items-baseline justify-between gap-3"><p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-ink/60">Sala de espera</p><p className="text-sm font-black">{lobby.teams.length}/{MAX_TEAMS}</p></div>
+      <p className="mt-2 text-sm font-semibold text-ink/60">{lobby.teams.length < 2 ? 'Falta al menos un equipo para empezar.' : lobby.teams.length < MAX_TEAMS ? `Pueden entrar ${MAX_TEAMS - lobby.teams.length} equipos más.` : 'La mesa está completa.'}</p>
       <div className="mt-4 space-y-2">
         {lobby.teams.map((team) => (
           <div key={team.id} className="flex items-center gap-3 rounded-xl bg-ink/6 px-3 py-2">
@@ -585,7 +586,7 @@ function SubmitBar({ disabled, isSubmitting, onClick }: { disabled: boolean; isS
   return <div className="sticky bottom-3 z-10 mt-4 bg-inherit pt-2"><button type="button" disabled={disabled || isSubmitting} className="min-h-12 w-full rounded-xl bg-ink px-4 py-3 text-sm font-black text-paper shadow-[0_4px_0_rgb(0_0_0_/_0.18)] transition-transform active:scale-[0.98] disabled:opacity-35" onClick={onClick}>{isSubmitting ? 'Guardando respuesta…' : 'Confirmar respuesta'}</button></div>
 }
 
-const TEAM_COLORS = ['#e85f4a', '#e5ad22', '#63c5a0', '#4a88e6']
+const TEAM_COLORS = ['#e85f4a', '#e5ad22', '#63c5a0', '#4a88e6', '#9d6ae0', '#d8478f']
 const BET_OPTIONS = [100, 200, 300, 400, 500]
 const JUDGE_STALE_MS = 90 * 1000
 const CATEGORY_LABELS = { sequence: 'Secuencia', association: 'Asociación', common: 'En común', approximation: 'Aproximación' }

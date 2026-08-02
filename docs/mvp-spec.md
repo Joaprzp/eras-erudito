@@ -2,7 +2,7 @@
 
 ## Propósito
 
-Eras Erudito es una adaptación web privada de *El Erudito* para partidas presenciales de dos a cuatro Equipos. Cada Equipo juega desde un teléfono y una Pantalla companion muestra la información compartida. El MVP debe permitir completar una Partida de punta a punta y obtener feedback cualitativo de pruebas familiares.
+Eras Erudito es una adaptación web privada de *El Erudito* para partidas presenciales de dos a seis Equipos. Cada Equipo juega desde un teléfono y una Pantalla companion muestra la información compartida. El MVP debe permitir completar una Partida de punta a punta y obtener feedback cualitativo de pruebas familiares.
 
 Las reglas y términos canónicos están en [`CONTEXT.md`](../CONTEXT.md). Las decisiones arquitectónicas están en [`docs/adr/`](./adr/).
 
@@ -29,7 +29,7 @@ Queda fuera:
 1. La Pantalla companion crea una Sala y muestra un código y QR.
 2. Cada Equipo entra desde su teléfono, elige nombre y un color único.
 3. El primer Equipo es el Anfitrión; puede quitar entradas erróneas. Los Equipos pueden abandonar o editar nombre/color mientras la Sala espera.
-4. El Anfitrión puede iniciar con dos, tres o cuatro Equipos. El orden de ingreso define la rotación y el Anfitrión es el primer Retador.
+4. El Anfitrión puede iniciar con cualquier cantidad de Equipos entre dos y seis. El juego original admite hasta cuatro; el MVP amplía el tope porque la dinámica no cambia y entran más participantes. El orden de ingreso define la rotación y el Anfitrión es el primer Retador.
 5. Al iniciar, la Sala se cierra: no entran, salen ni sustituyen Equipos. Una recarga o corte breve recupera el mismo Equipo desde el mismo navegador.
 
 No hay cuentas. La Pantalla companion y cada Equipo reciben una credencial aleatoria no adivinable, limitada a la vida de esa Sala. El código/QR permite encontrar la Sala; la credencial autoriza las acciones del dispositivo.

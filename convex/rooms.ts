@@ -5,6 +5,7 @@ import { internalMutation, internalQuery, mutation, query } from './_generated/s
 import type { MutationCtx, QueryCtx } from './_generated/server'
 import type { Id } from './_generated/dataModel'
 import { cardDeck, type CardCategory, type QuestionCard } from './cardDeck'
+import { MAX_TEAMS } from './constants'
 import { commonRulingArgs } from './schema'
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -90,8 +91,8 @@ export const join = mutation({
       .withIndex('by_room', (index) => index.eq('roomId', room._id))
       .collect()
 
-    if (teams.length >= 4) {
-      throw new Error('La sala ya tiene cuatro equipos.')
+    if (teams.length >= MAX_TEAMS) {
+      throw new Error(`La sala ya tiene ${MAX_TEAMS} equipos.`)
     }
 
     if (teams.some((team) => team.color === args.color)) {
