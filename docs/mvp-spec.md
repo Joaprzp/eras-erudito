@@ -89,7 +89,8 @@ Durante la espera, el companion solo muestra cuántos Equipos ya confirmaron: nu
 
 - Cinco elementos para los que se identifica una característica compartida.
 - Entrada móvil: texto breve.
-- Tras revelar las respuestas en el companion, el Anfitrión decide desde su teléfono: gana Retador, gana Retado o Empate.
+- Tras revelar las respuestas en el companion, el Fallo lo emite el Anfitrión desde su teléfono o el Juez si el Anfitrión lo convoca: gana Retador, gana Retado o Empate.
+- El Juez responde con un fundamento que se muestra en el companion. El Anfitrión puede resolver a mano en cualquier momento, incluso mientras el Juez delibera, y si el Juez falla la ronda vuelve a él.
 - Ante Empate —incluido el caso de ninguna respuesta aceptable— se devuelven las Apuestas y termina el Turno del Retador.
 - El orden de confirmación es información de apoyo para que el Anfitrión resuelva respuestas igualmente defendibles.
 
@@ -124,7 +125,7 @@ Durante la espera, el companion solo muestra cuántos Equipos ya confirmaron: nu
 - Estado de espera y de Turno.
 - Tirada, elección de Retado y Apuesta cuando corresponde.
 - Respuesta privada por Categoría y confirmación final.
-- En el teléfono del Anfitrión, control de inicio/cierre y resolución de En Común.
+- En el teléfono del Anfitrión, control de inicio/cierre, resolución de En Común y convocatoria del Juez.
 
 ## Arquitectura
 

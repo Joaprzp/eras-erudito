@@ -81,7 +81,15 @@ Una Categoría de pregunta en la que se ordenan cinco elementos con un criterio 
 Una Categoría de pregunta en la que se relacionan, uno a uno, los cinco elementos de una columna con los de otra. En la Versión Familiar gana el Equipo con más asociaciones correctas y, ante empate, quien emitió antes su Respuesta final.
 
 **En Común**:
-Una Categoría de pregunta en la que se identifica la característica compartida por cinco elementos. Tras revelar las respuestas en la Pantalla companion, el Anfitrión decide desde su dispositivo si gana el Retador, el Retado o hay Empate. Ante Empate se restituyen las Apuestas y termina el Turno del Retador; el orden de Respuesta final puede ayudarle a elegir entre respuestas aceptables.
+Una Categoría de pregunta en la que se identifica la característica compartida por cinco elementos. Tras revelar las respuestas en la Pantalla companion, el Fallo queda en manos del Anfitrión o del Juez, según el Anfitrión decida. Ante Empate se restituyen las Apuestas y termina el Turno del Retador; el orden de Respuesta final puede ayudar a elegir entre respuestas aceptables.
+
+**Fallo**:
+La resolución de una ronda de En Común: gana el Retador, gana el Retado o hay Empate. A diferencia del resultado de las demás Categorías de pregunta, no se calcula a partir de la Tarjeta sino que alguien lo emite.
+_Avoid_: corrección, veredicto
+
+**Juez**:
+El tercero imparcial al que el Anfitrión puede delegar el Fallo de una ronda de En Común, para no tener que decidir él mismo entre respuestas defendibles. Emite un único Fallo acompañado de un fundamento que se muestra en la Pantalla companion. El Anfitrión elige si lo convoca y conserva siempre la potestad de resolver por su cuenta.
+_Avoid_: árbitro automático, moderador, corrector
 
 **Aproximación**:
 Una Categoría de pregunta en la que todos los Equipos activos responden una cifra y aportan al Pozo. Gana quien quede más cerca de la respuesta correcta; los empates exactos dividen el Pozo y cualquier resto se conserva para la próxima Aproximación.

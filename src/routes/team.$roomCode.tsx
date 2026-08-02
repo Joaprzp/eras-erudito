@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery } from 'convex/react'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
@@ -24,6 +24,7 @@ function TeamRoom() {
   const submitResponse = useMutation(api.rooms.submitResponse)
   const revealResponses = useMutation(api.rooms.revealResponses)
   const resolveCommon = useMutation(api.rooms.resolveCommon)
+  const requestCommonRuling = useMutation(api.rooms.requestCommonRuling)
   const advanceTurn = useMutation(api.rooms.advanceTurn)
   const chooseCategory = useMutation(api.rooms.chooseCategory)
   const buyCoin = useMutation(api.rooms.buyCoin)
@@ -140,6 +141,11 @@ function TeamRoom() {
     await runAction('resolve', () => resolveCommon({ code: roomCode, token: existingSession.token, outcome }), 'No pudimos resolver la ronda.')
   }
 
+  async function handleRequestRuling() {
+    if (!existingSession) return
+    await runAction('ruling', () => requestCommonRuling({ code: roomCode, token: existingSession.token }), 'No pudimos llamar al juez.')
+  }
+
   async function handleAdvanceTurn() {
     if (!existingSession) return
     await runAction('advance', () => advanceTurn({ code: roomCode, token: existingSession.token }), 'No pudimos continuar la partida.')
@@ -175,6 +181,7 @@ function TeamRoom() {
             onRemove={handleRemove}
             onRevealResponses={handleRevealResponses}
             onResolveCommon={handleResolveCommon}
+            onRequestRuling={handleRequestRuling}
             onRoll={handleRoll}
             onStart={handleStart}
             onAdvanceTurn={handleAdvanceTurn}
@@ -258,7 +265,10 @@ function teamActivity(lobby: Exclude<TeamLobby, null | undefined>, isMyTurn: boo
   if (round.phase === 'awaiting_card') return `${challenger} está por sacar la tarjeta.`
   if (round.phase === 'answering') return round.category === 'approximation' ? 'Todos los equipos escriben su aproximación en privado.' : `${challenger}${target ? ` y ${target}` : ''} están respondiendo en privado.`
   if (round.phase === 'ready_to_reveal') return 'Las respuestas están listas para revelar.'
-  if (round.phase === 'revealed') return round.category === 'common' ? 'El anfitrión está evaluando las respuestas.' : 'La pantalla companion muestra la solución.'
+  if (round.phase === 'revealed') {
+    if (round.category !== 'common') return 'La pantalla companion muestra la solución.'
+    return round.judge?.status === 'deliberating' ? 'Un juez imparcial está evaluando las respuestas.' : 'El anfitrión está evaluando las respuestas.'
+  }
   return 'La ronda se resolvió; el anfitrión continuará la partida.'
 }
 
@@ -275,6 +285,7 @@ function LobbyPanel({
   onRemove,
   onRevealResponses,
   onResolveCommon,
+  onRequestRuling,
   onRoll,
   onStart,
   onAdvanceTurn,
@@ -293,6 +304,7 @@ function LobbyPanel({
   onRemove: (teamId: Id<'teams'>) => void
   onRevealResponses: () => void
   onResolveCommon: (outcome: 'challenger' | 'target' | 'tie') => void
+  onRequestRuling: () => void
   onRoll: () => void
   onStart: () => void
   onAdvanceTurn: () => void
@@ -318,7 +330,7 @@ function LobbyPanel({
 
     return <section className="text-left">
       <TeamCockpit lobby={lobby} isMyTurn={isMyTurn} />
-      {round ? <RoundPanel pendingAction={pendingAction} round={round} roundState={lobby.roundState} self={lobby.self} isChallenger={isChallenger} maximumWager={maximumWager} target={target} teams={lobby.teams} onAdvanceTurn={onAdvanceTurn} onChooseBet={onChooseBet} onChooseCategory={onChooseCategory} onChooseRival={onChooseRival} onDrawCard={onDrawCard} onRevealResponses={onRevealResponses} onResolveCommon={onResolveCommon} onSubmitResponse={onSubmitResponse} /> : null}
+      {round ? <RoundPanel pendingAction={pendingAction} round={round} roundState={lobby.roundState} self={lobby.self} isChallenger={isChallenger} maximumWager={maximumWager} target={target} teams={lobby.teams} onAdvanceTurn={onAdvanceTurn} onChooseBet={onChooseBet} onChooseCategory={onChooseCategory} onChooseRival={onChooseRival} onDrawCard={onDrawCard} onRevealResponses={onRevealResponses} onResolveCommon={onResolveCommon} onRequestRuling={onRequestRuling} onSubmitResponse={onSubmitResponse} /> : null}
       {lobby.shopEligible ? <button type="button" disabled={lobby.self.money < 1000 || Boolean(pendingAction)} className="mt-3 min-h-12 w-full rounded-2xl bg-saffron px-4 py-3 text-sm font-black text-ink transition-transform active:scale-[0.98] disabled:opacity-35" onClick={onBuyCoin}>{pendingAction === 'coin' ? 'Comprando moneda…' : lobby.self.money >= 1000 ? 'Comprar moneda · $1000' : 'Te faltan $1000 para comprar moneda'}</button> : null}
       {error ? <p className="mt-3 rounded-xl bg-coral/20 px-3 py-2 text-sm font-semibold text-coral">{error}</p> : null}
       {isMyTurn && !round ? <button type="button" disabled={Boolean(pendingAction)} className="mt-3 min-h-14 w-full rounded-full bg-ink px-5 py-4 text-base font-black text-paper transition-transform active:scale-[0.98] disabled:opacity-60" onClick={onRoll}>{pendingAction === 'roll' ? 'Tirando dados…' : 'Tirar dos dados'}</button> : null}
@@ -367,6 +379,7 @@ function RoundPanel({
   onAdvanceTurn,
   onRevealResponses,
   onResolveCommon,
+  onRequestRuling,
   onSubmitResponse,
   round,
   roundState,
@@ -384,6 +397,7 @@ function RoundPanel({
   onAdvanceTurn: () => void
   onRevealResponses: () => void
   onResolveCommon: (outcome: 'challenger' | 'target' | 'tie') => void
+  onRequestRuling: () => void
   onSubmitResponse: (payload: string) => void
   round: NonNullable<Exclude<TeamLobby, null | undefined>['round']>
   roundState: Exclude<TeamLobby, null | undefined>['roundState']
@@ -441,9 +455,12 @@ function RoundPanel({
   }
 
   if (round.phase === 'revealed' && round.category === 'common') {
+    const isDeliberating = round.judge?.status === 'deliberating'
     return <div className="mt-3 rounded-2xl bg-mint/35 p-3">
-      <p className="font-display text-2xl tracking-[-0.05em]">El anfitrión decide.</p>
-      {self.isHost ? <div className="mt-3 rounded-xl border border-ink/15 bg-paper/45 p-3"><p className="text-[0.58rem] font-black uppercase tracking-[0.16em] text-ink/55">Control de anfitrión</p><div className="mt-2 grid gap-2"><button type="button" disabled={isBusy} className="min-h-12 rounded-xl bg-ink px-4 py-3 text-sm font-black text-paper disabled:opacity-45" onClick={() => onResolveCommon('challenger')}>{pendingAction === 'resolve' ? 'Resolviendo…' : 'Gana el retador'}</button><button type="button" disabled={isBusy} className="min-h-12 rounded-xl bg-paper px-4 py-3 text-sm font-black disabled:opacity-45" onClick={() => onResolveCommon('target')}>Gana el retado</button><button type="button" disabled={isBusy} className="min-h-12 rounded-xl border border-ink/35 px-4 py-3 text-sm font-black disabled:opacity-45" onClick={() => onResolveCommon('tie')}>Empate</button></div></div> : <p className="mt-2 text-sm font-semibold text-ink/70">El anfitrión está evaluando las respuestas.</p>}
+      <p className="font-display text-2xl tracking-[-0.05em]">{isDeliberating ? 'El juez está deliberando.' : 'Alguien tiene que decidir.'}</p>
+      {self.isHost
+        ? <HostRulingControls challengerName={teams.find((team) => team.id === round.challengerId)?.name ?? 'el retador'} targetName={target?.name ?? 'el retado'} isBusy={isBusy} judge={round.judge} pendingAction={pendingAction} onRequestRuling={onRequestRuling} onResolveCommon={onResolveCommon} />
+        : <p className="mt-2 text-sm font-semibold text-ink/70">{isDeliberating ? 'Un juez imparcial está evaluando las respuestas.' : 'El anfitrión está evaluando las respuestas.'}</p>}
     </div>
   }
 
@@ -459,6 +476,45 @@ function RoundPanel({
   return <div className="mt-3 rounded-2xl bg-mint/35 p-3">
     <p className="font-display text-2xl tracking-[-0.05em]">Respuestas reveladas.</p>
     <p className="mt-2 text-sm font-semibold text-ink/70">La resolución de la ronda llega en el siguiente paso.</p>
+  </div>
+}
+
+function HostRulingControls({ challengerName, targetName, isBusy, judge, pendingAction, onRequestRuling, onResolveCommon }: {
+  challengerName: string
+  targetName: string
+  isBusy: boolean
+  judge: Judge | undefined
+  pendingAction: string | null
+  onRequestRuling: () => void
+  onResolveCommon: (outcome: 'challenger' | 'target' | 'tie') => void
+}) {
+  const requestedAt = judge?.status === 'deliberating' ? judge.requestedAt : undefined
+  const [staleRequestedAt, setStaleRequestedAt] = useState<number>()
+
+  useEffect(() => {
+    if (requestedAt === undefined) return
+
+    const timeout = window.setTimeout(() => setStaleRequestedAt(requestedAt), Math.max(0, requestedAt + JUDGE_STALE_MS - Date.now()))
+    return () => window.clearTimeout(timeout)
+  }, [requestedAt])
+
+  const isDeliberating = requestedAt !== undefined
+  const canRetry = isDeliberating && staleRequestedAt === requestedAt
+  const judgeLabel = canRetry ? 'El juez tarda demasiado · reintentar'
+    : isDeliberating ? 'El juez está deliberando…'
+    : pendingAction === 'ruling' ? 'Llamando al juez…'
+    : 'Que decida el juez'
+
+  return <div className="mt-3 rounded-xl border border-ink/15 bg-paper/45 p-3">
+    <p className="text-[0.58rem] font-black uppercase tracking-[0.16em] text-ink/55">Control de anfitrión</p>
+    {judge?.status === 'failed' ? <p className="mt-2 rounded-lg bg-coral/20 px-3 py-2 text-xs font-semibold text-coral">El juez no pudo resolver: {judge.error ?? 'error desconocido'}. Decidí vos o volvé a intentarlo.</p> : null}
+    <button type="button" disabled={isBusy || (isDeliberating && !canRetry)} className="mt-2 min-h-12 w-full rounded-xl bg-mint px-4 py-3 text-sm font-black text-ink disabled:opacity-45" onClick={onRequestRuling}>{judgeLabel}</button>
+    <p className="mt-3 text-[0.58rem] font-black uppercase tracking-[0.16em] text-ink/55">O resolvelo vos</p>
+    <div className="mt-2 grid gap-2">
+      <button type="button" disabled={isBusy} className="min-h-12 rounded-xl bg-ink px-4 py-3 text-sm font-black text-paper disabled:opacity-45" onClick={() => onResolveCommon('challenger')}>{pendingAction === 'resolve' ? 'Resolviendo…' : `Gana ${challengerName}`}</button>
+      <button type="button" disabled={isBusy} className="min-h-12 rounded-xl bg-paper px-4 py-3 text-sm font-black disabled:opacity-45" onClick={() => onResolveCommon('target')}>Gana {targetName}</button>
+      <button type="button" disabled={isBusy} className="min-h-12 rounded-xl border border-ink/35 px-4 py-3 text-sm font-black disabled:opacity-45" onClick={() => onResolveCommon('tie')}>Empate</button>
+    </div>
   </div>
 }
 
@@ -523,9 +579,12 @@ function SubmitBar({ disabled, isSubmitting, onClick }: { disabled: boolean; isS
 
 const TEAM_COLORS = ['#e85f4a', '#e5ad22', '#63c5a0', '#4a88e6']
 const BET_OPTIONS = [100, 200, 300, 400, 500]
+const JUDGE_STALE_MS = 90 * 1000
 const CATEGORY_LABELS = { sequence: 'Secuencia', association: 'Asociación', common: 'En común', approximation: 'Aproximación' }
 
 type Team = { id: Id<'teams'>; coins: number; color: string; isHost: boolean; joinIndex: number; money: number; name: string; position: number }
+
+type Judge = { status: 'deliberating' | 'decided' | 'failed'; requestedAt: number; rationale?: string; error?: string }
 
 type TeamLobby = {
   code: string
@@ -542,6 +601,7 @@ type TeamLobby = {
     targetId?: Id<'teams'>
     wager?: number
     result?: { kind: 'challenger' | 'target' | 'approximation' | 'tie'; payout: number; winnerTeamIds: Id<'teams'>[] }
+    judge?: Judge
     isStart?: boolean
   }
   roundState: {

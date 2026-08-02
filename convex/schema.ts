@@ -8,6 +8,8 @@ const category = v.union(
   v.literal('approximation'),
 )
 
+export const commonRulingArgs = { roomId: v.id('rooms'), roundId: v.string() }
+
 export default defineSchema({
   rooms: defineTable({
     code: v.string(),
@@ -42,6 +44,12 @@ export default defineSchema({
         kind: v.union(v.literal('challenger'), v.literal('target'), v.literal('approximation'), v.literal('tie')),
         payout: v.number(),
         winnerTeamIds: v.array(v.id('teams')),
+      })),
+      judge: v.optional(v.object({
+        status: v.union(v.literal('deliberating'), v.literal('decided'), v.literal('failed')),
+        requestedAt: v.number(),
+        rationale: v.optional(v.string()),
+        error: v.optional(v.string()),
       })),
       isStart: v.optional(v.boolean()),
     })),

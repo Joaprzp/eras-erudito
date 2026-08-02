@@ -11,6 +11,7 @@
     "check": "bun run build && bun run lint && bun run typecheck"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@base-ui-components/react": "^1.0.0-rc.0",
     "@react-three/fiber": "^9.6.1",
     "@tanstack/react-router": "^1.170.18",
@@ -29,6 +30,7 @@
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/router-plugin": "^1.168.23",
+    "@types/node": "^26.1.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.185.1",

@@ -1,15 +1,19 @@
 import { v } from 'convex/values'
 
-import { internalMutation, mutation, query } from './_generated/server'
+import { internal } from './_generated/api'
+import { internalMutation, internalQuery, mutation, query } from './_generated/server'
 import type { MutationCtx, QueryCtx } from './_generated/server'
 import type { Id } from './_generated/dataModel'
 import { cardDeck, type CardCategory, type QuestionCard } from './cardDeck'
+import { commonRulingArgs } from './schema'
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const CATEGORIES = ['sequence', 'association', 'common', 'approximation'] as const
 const EMPTY_LOBBY_TTL_MS = 30 * 60 * 1000
 const LOBBY_TTL_MS = 12 * 60 * 60 * 1000
 const GAME_TTL_MS = 24 * 60 * 60 * 1000
+const JUDGE_STALE_MS = 90 * 1000
+const PURGE_BATCH = 100
 
 type CategoryStat = { attempts: number; wins: number; totalResponseMs: number }
 type CategoryStats = Record<CardCategory, CategoryStat>
@@ -496,15 +500,98 @@ export const resolveCommon = mutation({
       throw new Error('Esta ronda no está lista para resolver.')
     }
 
-    const winnerTeamIds = args.outcome === 'challenger' ? [round.challengerId] : args.outcome === 'target' && round.targetId ? [round.targetId] : []
-    if (args.outcome === 'target' && winnerTeamIds.length === 0) throw new Error('No encontramos al equipo retado.')
-
-    if (winnerTeamIds[0]) {
-      const winner = await ctx.db.get(winnerTeamIds[0])
-      if (winner) await ctx.db.patch(winner._id, { correctMarks: (winner.correctMarks ?? 0) + 1 })
-    }
-    await settleRound(ctx, room, round, { kind: args.outcome, winnerTeamIds })
+    await settleCommonRuling(ctx, room, { ...round, judge: undefined }, args.outcome)
     await touchRoom(ctx, room._id)
+  },
+})
+
+export const requestCommonRuling = mutation({
+  args: { code: v.string(), token: v.string() },
+  handler: async (ctx, args) => {
+    const { room, team } = await requireActiveTeam(ctx, args)
+    const round = room.round
+
+    if (!team.isHost) throw new Error('Solo el anfitrión puede llamar al juez.')
+    if (!round || round.category !== 'common' || round.phase !== 'revealed') {
+      throw new Error('Esta ronda no está lista para resolver.')
+    }
+    if (round.judge?.status === 'deliberating' && !isStaleDeliberation(round.judge.requestedAt)) {
+      throw new Error('El juez ya está deliberando.')
+    }
+
+    const roundId = round.roundId
+    if (!roundId) throw new Error('No encontramos la ronda en juego.')
+
+    await ctx.db.patch(room._id, {
+      round: { ...round, judge: { status: 'deliberating', requestedAt: Date.now() } },
+      lastActivityAt: Date.now(),
+    })
+    await ctx.scheduler.runAfter(0, internal.judge.decideCommon, { roomId: room._id, roundId })
+  },
+})
+
+export const commonRulingInput = internalQuery({
+  args: commonRulingArgs,
+  handler: async (ctx, args) => {
+    const deliberation = await loadDeliberatingRound(ctx, args)
+    const cardId = deliberation?.round.cardId
+
+    if (!deliberation || !cardId) return null
+    const { room, round } = deliberation
+    const card = getCard('common', cardId)
+
+    if (card.category !== 'common') return null
+
+    const teams = await listTeams(ctx, room._id)
+    const responses = await ctx.db
+      .query('responses')
+      .withIndex('by_round', (index) => index.eq('roundId', args.roundId))
+      .collect()
+
+    return {
+      clues: card.clues,
+      solution: card.solution,
+      answers: responses
+        .sort((left, right) => left.submittedAt - right.submittedAt)
+        .map((response, index) => ({
+          order: index + 1,
+          role: response.teamId === round.challengerId ? 'challenger' as const : 'target' as const,
+          teamName: teams.find((team) => team._id === response.teamId)?.name ?? 'Equipo',
+          text: String(JSON.parse(response.payload)),
+        })),
+    }
+  },
+})
+
+export const applyCommonRuling = internalMutation({
+  args: {
+    ...commonRulingArgs,
+    outcome: v.union(v.literal('challenger'), v.literal('target'), v.literal('tie')),
+    rationale: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const deliberation = await loadDeliberatingRound(ctx, args)
+
+    if (!deliberation) return
+    const { room, round, judge } = deliberation
+
+    await settleCommonRuling(ctx, room, { ...round, judge: { ...judge, status: 'decided', rationale: args.rationale } }, args.outcome)
+    await touchRoom(ctx, room._id)
+  },
+})
+
+export const failCommonRuling = internalMutation({
+  args: { ...commonRulingArgs, error: v.string() },
+  handler: async (ctx, args) => {
+    const deliberation = await loadDeliberatingRound(ctx, args)
+
+    if (!deliberation) return
+    const { room, round, judge } = deliberation
+
+    await ctx.db.patch(room._id, {
+      round: { ...round, judge: { ...judge, status: 'failed', error: args.error } },
+      lastActivityAt: Date.now(),
+    })
   },
 })
 
@@ -583,17 +670,13 @@ export const close = mutation({
 })
 
 export const purgeExpired = internalMutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { after: v.optional(v.number()) },
+  handler: async (ctx, args) => {
     const now = Date.now()
-    const [rooms, teams, responses] = await Promise.all([
-      ctx.db.query('rooms').collect(),
-      ctx.db.query('teams').collect(),
-      ctx.db.query('responses').collect(),
-    ])
-    const roomIds = new Set(rooms.map((room) => room._id))
-    const orphanedTeams = teams.filter((team) => !roomIds.has(team.roomId))
-    const orphanedResponses = responses.filter((response) => !roomIds.has(response.roomId))
+    const rooms = await ctx.db
+      .query('rooms')
+      .withIndex('by_creation_time', (index) => index.gt('_creationTime', args.after ?? 0))
+      .take(PURGE_BATCH)
     let deletedRooms = 0
 
     for (const room of rooms) {
@@ -606,12 +689,53 @@ export const purgeExpired = internalMutation({
       deletedRooms += 1
     }
 
-    await Promise.all([
-      ...orphanedTeams.map((team) => ctx.db.delete(team._id)),
-      ...orphanedResponses.map((response) => ctx.db.delete(response._id)),
-    ])
+    const lastRoom = rooms.at(-1)
 
-    return { deletedOrphanedResponses: orphanedResponses.length, deletedOrphanedTeams: orphanedTeams.length, deletedRooms }
+    if (lastRoom && rooms.length === PURGE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.rooms.purgeExpired, { after: lastRoom._creationTime })
+    } else {
+      await ctx.scheduler.runAfter(0, internal.rooms.purgeOrphanedTeams, {})
+    }
+
+    return { deletedRooms }
+  },
+})
+
+export const purgeOrphanedTeams = internalMutation({
+  args: { after: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const teams = await ctx.db
+      .query('teams')
+      .withIndex('by_creation_time', (index) => index.gt('_creationTime', args.after ?? 0))
+      .take(PURGE_BATCH)
+    const deletedTeams = await deleteOrphans(ctx, teams)
+    const lastTeam = teams.at(-1)
+
+    if (lastTeam && teams.length === PURGE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.rooms.purgeOrphanedTeams, { after: lastTeam._creationTime })
+    } else {
+      await ctx.scheduler.runAfter(0, internal.rooms.purgeOrphanedResponses, {})
+    }
+
+    return { deletedTeams }
+  },
+})
+
+export const purgeOrphanedResponses = internalMutation({
+  args: { after: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const responses = await ctx.db
+      .query('responses')
+      .withIndex('by_creation_time', (index) => index.gt('_creationTime', args.after ?? 0))
+      .take(PURGE_BATCH)
+    const deletedResponses = await deleteOrphans(ctx, responses)
+    const lastResponse = responses.at(-1)
+
+    if (lastResponse && responses.length === PURGE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.rooms.purgeOrphanedResponses, { after: lastResponse._creationTime })
+    }
+
+    return { deletedResponses }
   },
 })
 
@@ -664,6 +788,19 @@ async function deleteRoom(
     ...responses.map((response) => ctx.db.delete(response._id)),
   ])
   await ctx.db.delete(roomId)
+}
+
+async function deleteOrphans<T extends { _id: Id<'teams'> | Id<'responses'>; roomId: Id<'rooms'> }>(
+  ctx: MutationCtx,
+  records: T[],
+) {
+  const roomIds = [...new Set(records.map((record) => record.roomId))]
+  const rooms = await Promise.all(roomIds.map((roomId) => ctx.db.get(roomId)))
+  const existingRoomIds = new Set(rooms.flatMap((room) => room ? [room._id] : []))
+  const orphans = records.filter((record) => !existingRoomIds.has(record.roomId))
+
+  await Promise.all(orphans.map((orphan) => ctx.db.delete(orphan._id)))
+  return orphans.length
 }
 
 function roomTtl(phase: 'lobby' | 'active' | 'finished', teamCount: number) {
@@ -935,6 +1072,40 @@ async function calculateAutomaticResult(ctx: MutationCtx, room: NonNullable<Awai
 
   if (!winner) throw new Error('No encontramos respuestas para corregir.')
   return { kind: winner === round.challengerId ? 'challenger' : 'target', winnerTeamIds: [winner] }
+}
+
+function isStaleDeliberation(requestedAt: number) {
+  return Date.now() - requestedAt >= JUDGE_STALE_MS
+}
+
+async function loadDeliberatingRound(
+  ctx: MutationCtx | QueryCtx,
+  args: { roomId: Id<'rooms'>; roundId: string },
+) {
+  const room = await ctx.db.get(args.roomId)
+  const round = room?.round
+
+  if (!room || !round || round.roundId !== args.roundId) return null
+  if (round.category !== 'common' || round.phase !== 'revealed') return null
+  if (round.judge?.status !== 'deliberating') return null
+
+  return { room, round, judge: round.judge }
+}
+
+async function settleCommonRuling(
+  ctx: MutationCtx,
+  room: NonNullable<Awaited<ReturnType<typeof getRoomByCode>>>,
+  round: RoundRecord,
+  outcome: 'challenger' | 'target' | 'tie',
+) {
+  const winnerTeamIds = outcome === 'challenger' ? [round.challengerId] : outcome === 'target' && round.targetId ? [round.targetId] : []
+  if (outcome === 'target' && winnerTeamIds.length === 0) throw new Error('No encontramos al equipo retado.')
+
+  if (winnerTeamIds[0]) {
+    const winner = await ctx.db.get(winnerTeamIds[0])
+    if (winner) await ctx.db.patch(winner._id, { correctMarks: (winner.correctMarks ?? 0) + 1 })
+  }
+  await settleRound(ctx, room, round, { kind: outcome, winnerTeamIds })
 }
 
 async function settleRound(

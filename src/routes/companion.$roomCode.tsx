@@ -363,7 +363,7 @@ function RoundStatus({ lobby }: { lobby: CompanionLobby }) {
   const round = lobby.round!
   const next = useMemo(() => ({
     category: round.phase === 'choose_category' ? 'Inicio' : CATEGORY_LABELS[round.category],
-    key: [round.roundId, round.phase, round.targetId, round.wager, round.result?.winnerTeamIds.join(',')].join(':'),
+    key: [round.roundId, round.phase, round.targetId, round.wager, round.judge?.status, round.result?.winnerTeamIds.join(',')].join(':'),
     message: roundMessage(round, lobby.teams),
     phase: round.phase,
     wager: round.wager,
@@ -430,8 +430,27 @@ function QuestionPanel({ round, state, teams }: { round: NonNullable<CompanionLo
     {card.category === 'association' ? <div className="mt-5 grid grid-cols-2 gap-2 text-sm font-bold sm:gap-3 sm:text-base">{card.leftItems.map((item) => <span key={item} className="rounded-xl bg-ink/8 px-3 py-2.5">{item}</span>)}{card.rightItems.map((item) => <span key={item} className="rounded-xl bg-ink/8 px-3 py-2.5">{item}</span>)}</div> : null}
     {card.category === 'common' ? <div className="mt-5 flex flex-wrap gap-2">{card.clues.map((clue) => <span key={clue} className="rounded-full bg-ink/8 px-3 py-1.5 text-sm font-bold sm:px-4 sm:py-2">{clue}</span>)}</div> : null}
     {isResult ? <ResultBanner lobbyRound={round} teams={teams} /> : null}
+    {round.judge ? <JudgePanel judge={round.judge} /> : null}
     {round.phase === 'revealed' || isResult ? <RevealPanel card={card} answers={state.revealedResponses ?? []} /> : <p className="mt-5 text-sm font-semibold text-ink/55">Las respuestas siguen privadas hasta la revelación.</p>}
   </section>
+}
+
+function JudgePanel({ judge }: { judge: Judge }) {
+  if (judge.status === 'deliberating') {
+    return <div aria-live="polite" className="mt-5 flex items-center gap-3 rounded-2xl border-2 border-dashed border-ink/25 bg-mint/25 px-4 py-3">
+      <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-coral" />
+      <p className="font-display text-2xl tracking-[-0.04em]">El juez está deliberando…</p>
+    </div>
+  }
+
+  if (judge.status === 'failed') {
+    return <div className="mt-5 rounded-2xl bg-ink/8 px-4 py-3"><p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/55">Juez</p><p className="mt-1 font-display text-2xl tracking-[-0.04em]">No pudo resolver. Decide el anfitrión.</p></div>
+  }
+
+  return <div className="mt-5 rounded-2xl border-2 border-ink/15 bg-mint/35 px-4 py-3">
+    <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/55">Fallo del juez</p>
+    {judge.rationale ? <p className="mt-1.5 text-base font-semibold leading-snug text-ink/85 sm:text-lg">{judge.rationale}</p> : null}
+  </div>
 }
 
 function ResultBanner({ lobbyRound, teams }: { lobbyRound: NonNullable<CompanionLobby['round']>; teams: CompanionLobby['teams'] }) {
@@ -471,6 +490,7 @@ function roundMessage(round: NonNullable<CompanionLobby['round']>, teams: Compan
   if (round.phase === 'answering') return `${challenger} vs. ${target ?? 'su rival'}: respuestas en curso.`
   if (round.phase === 'ready_to_reveal') return 'Todas las respuestas están listas.'
   if (round.phase === 'resolved') return 'Ronda resuelta.'
+  if (round.judge?.status === 'deliberating') return 'El juez está deliberando.'
   return 'Tarjeta revelada.'
 }
 
@@ -491,6 +511,7 @@ type CompanionLobby = {
     targetId?: Id<'teams'>
     wager?: number
     result?: { kind: 'challenger' | 'target' | 'approximation' | 'tie'; payout: number; winnerTeamIds: Id<'teams'>[] }
+    judge?: Judge
     isStart?: boolean
   }
   roundState: {
@@ -504,6 +525,8 @@ type CompanionLobby = {
   turnTeamId?: Id<'teams'>
   winnerTeamId?: Id<'teams'>
 }
+
+type Judge = { status: 'deliberating' | 'decided' | 'failed'; requestedAt: number; rationale?: string; error?: string }
 
 const CATEGORY_LABELS = { sequence: 'Secuencia', association: 'Asociación', common: 'En común', approximation: 'Aproximación' }
 
