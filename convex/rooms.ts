@@ -6,6 +6,18 @@ import type { MutationCtx, QueryCtx } from './_generated/server'
 import type { Id } from './_generated/dataModel'
 import { cardDeck, type CardCategory, type QuestionCard } from './cardDeck'
 import { MAX_TEAMS } from './constants'
+import {
+  calculateMovement,
+  getTileConfig,
+  calculateBetBounds,
+  resolveInsolvency,
+  transferPot,
+  evaluateSequence,
+  evaluateAssociation,
+  evaluateApproximation,
+  resolveTurnProgression,
+  checkVictoryCondition,
+} from './engine'
 import { commonRulingArgs } from './schema'
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -279,13 +291,8 @@ export const roll = mutation({
     const secondDie = rollDie()
     const total = firstDie + secondDie
     const previousPosition = team.position ?? 0
-    const rawPosition = previousPosition + total
-    const position = rawPosition % 54
-    const landedOnStart = position === 0
-    const crossedStart = rawPosition >= 54
-    const space = landedOnStart ? undefined : room.board?.[position - 1]
-
-    if (!landedOnStart && !space) throw new Error('No encontramos el casillero de destino.')
+    const { position, crossedStart, landedOnStart } = calculateMovement(previousPosition, total)
+    const tileConfig = getTileConfig(position, room.board ?? [], landedOnStart)
 
     await ctx.db.patch(room._id, {
       lastDice: { first: firstDie, second: secondDie },
@@ -300,13 +307,13 @@ export const roll = mutation({
     }
     await ctx.db.patch(room._id, {
       round: {
-        category: landedOnStart ? 'sequence' : space!.category,
+        category: tileConfig.category,
         challengerId: team._id,
-        isStart: landedOnStart,
-        maxBet: landedOnStart ? 500 : space!.maxBet,
-        phase: landedOnStart ? 'choose_category' : space!.category === 'approximation' ? 'choose_bet' : 'choose_rival',
+        isStart: tileConfig.isStart,
+        maxBet: tileConfig.maxBet,
+        phase: tileConfig.isStart ? 'choose_category' : tileConfig.category === 'approximation' ? 'choose_bet' : 'choose_rival',
       },
-      shopTeamId: space?.isShop ? team._id : undefined,
+      shopTeamId: tileConfig.isShop ? team._id : undefined,
     })
 
     return { position, total }
