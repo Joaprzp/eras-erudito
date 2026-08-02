@@ -38,11 +38,6 @@ type Board3DProps = {
 type Board3DState = {
   hasError: boolean
 }
-  sequence: '#e85f4a',
-  association: '#e5ad22',
-  common: '#63c5a0',
-  approximation: '#4a88e6',
-}
 const INK = '#21160f'
 const PAPER = '#f7efd9'
 
