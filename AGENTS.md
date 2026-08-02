@@ -12,6 +12,10 @@ Tasks, specs, and bugs are managed in GitHub Issues. See `docs/agents/issue-trac
 
 The five default triage labels are used. See `docs/agents/triage-labels.md`.
 
+### Session workflow
+
+Two repo-owned skills bookend a session: `prime` loads context at the start, `ship` closes a batch out. See `.claude/skills/prime/SKILL.md` and `.claude/skills/ship/SKILL.md`.
+
 ### Domain docs
 
 This repository uses a single domain context: `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
