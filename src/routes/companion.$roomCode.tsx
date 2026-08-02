@@ -114,9 +114,7 @@ function useAmbientWind(enabled: boolean, naturallyDucked: boolean) {
   return { activate, duckForEffect }
 }
 
-function SoundControl({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
-  return <button type="button" aria-pressed={enabled} className={`min-h-9 rounded-full border px-3 py-1.5 text-[0.62rem] font-black uppercase tracking-[0.12em] transition-colors ${enabled ? 'border-mint/60 bg-mint text-ink' : 'border-paper/20 bg-paper/8 text-paper/70'}`} onClick={onClick}>{enabled ? 'Sonido activo' : 'Activar sonido'}</button>
-}
+
 
 function CompanionRoom() {
   const { roomCode } = Route.useParams()

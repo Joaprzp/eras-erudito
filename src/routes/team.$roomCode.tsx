@@ -238,22 +238,7 @@ function TeamRoom() {
   )
 }
 
-function TeamCockpit({ lobby, isMyTurn }: { lobby: Exclude<TeamLobby, null | undefined>; isMyTurn: boolean }) {
-  const selfTeam = lobby.teams.find((team) => team.id === lobby.self.id)
-  const activity = teamActivity(lobby, isMyTurn)
 
-  return <header className="rounded-[1.5rem] bg-ink p-3 text-paper shadow-[0_16px_35px_rgb(33_22_15_/_0.16)]">
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="h-4 w-4 shrink-0 rounded-full ring-2 ring-paper/35" style={{ backgroundColor: selfTeam?.color }} />
-        <div className="min-w-0"><p className="truncate font-display text-2xl tracking-[-0.05em]">{lobby.self.name}</p><p className="mt-0.5 text-[0.54rem] font-black uppercase tracking-[0.15em] text-paper/55">Sala {lobby.code}</p></div>
-      </div>
-      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[0.56rem] font-black uppercase tracking-[0.1em] ${isMyTurn ? 'bg-saffron text-ink' : 'bg-paper/12 text-paper/75'}`}>{isMyTurn ? 'Tu turno' : 'En juego'}</span>
-    </div>
-    <div className="mt-3 grid grid-cols-3 gap-1.5"><span className="rounded-xl bg-paper px-2 py-1.5 text-center text-sm font-black text-ink">${lobby.self.money}</span><span className="rounded-xl bg-saffron px-2 py-1.5 text-center text-sm font-black text-ink">{selfTeam?.coins ?? 0} {(selfTeam?.coins ?? 0) === 1 ? 'moneda' : 'monedas'}</span><span className="rounded-xl bg-paper/12 px-2 py-1.5 text-center text-sm font-bold text-paper/80">Dados {lobby.lastDice ? `${lobby.lastDice.first}+${lobby.lastDice.second}` : '—'}</span></div>
-    <p className="mt-3 border-t border-paper/12 pt-2 text-xs font-semibold leading-snug text-paper/80">{activity}</p>
-  </header>
-}
 
 function teamActivity(lobby: Exclude<TeamLobby, null | undefined>, isMyTurn: boolean) {
   const round = lobby.round
