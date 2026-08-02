@@ -135,6 +135,7 @@ Durante la espera, el companion solo muestra cuántos Equipos ya confirmaron: nu
 - **Rutas:** TanStack Router con rutas basadas en archivos.
 - **Backend y estado autoritativo:** Convex, incluidas mutaciones transaccionales que validen cada transición de la Partida.
 - **Estado local:** Zustand únicamente para credenciales de sesión y preferencia de tema.
+- **Juez:** un proveedor externo de modelo de lenguaje, aislado en `convex/judge.ts`. Es la única dependencia de un servicio externo durante una Partida; el resto del código sólo conoce el Fallo y su fundamento. Ver `docs/adr/0004`.
 - **Estilos:** Tailwind CSS v4, tokens CSS/OKLCH, Base UI, CVA, clsx y tailwind-merge.
 - **Deploy privado:** Cloudflare Workers Static Assets para frontend y Convex desplegado por separado.
 - **Calidad:** ESLint, TypeScript y validación de lint, typecheck y build sin `--noEmit` por compatibilidad con Convex.

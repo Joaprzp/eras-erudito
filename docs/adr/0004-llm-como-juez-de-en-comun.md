@@ -2,6 +2,8 @@
 
 En Común es la única Categoría de pregunta cuyo resultado no se puede calcular: la respuesta es texto libre y hay que juzgar si captura la característica compartida. Hasta ahora fallaba siempre el Anfitrión, que además es un Equipo en juego, y eso lo pone en una posición incómoda cuando la ronda es reñida o cuando él mismo es el Retador. Incorporamos un Juez —un llamado a Claude Sonnet que devuelve el Fallo y su fundamento— que el Anfitrión puede convocar botón mediante.
 
+El proveedor queda encerrado en `convex/judge.ts`: es el único archivo que lo nombra o que conoce su API. El resto del sistema —el glosario, el motor de la Partida y las dos pantallas— habla del Juez, del Fallo y de su fundamento, nunca del modelo. Cambiar de proveedor es reescribir ese archivo.
+
 El Juez convive con el Fallo manual en lugar de reemplazarlo: los tres botones del Anfitrión siguen disponibles incluso mientras el Juez delibera, quien resuelva primero manda, y si la llamada falla la ronda vuelve a quedar en manos del Anfitrión. La Partida nunca queda bloqueada esperando una respuesta externa.
 
 ## Considered Options
