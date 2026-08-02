@@ -26,7 +26,7 @@ export function TeamLobby({
   return (
     <section className="mt-7 rounded-[1.8rem] border-2 border-ink p-5 text-left bg-paper">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-ink/60">Sala de espera</p>
+        <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-ink/60">Sala</p>
         <p className="text-sm font-black">{lobby.teams.length}/{MAX_TEAMS}</p>
       </div>
 

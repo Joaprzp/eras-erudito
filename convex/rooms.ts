@@ -1065,9 +1065,13 @@ async function calculateAutomaticResult(ctx: MutationCtx, room: NonNullable<Awai
     .collect()
 
   if (card.category === 'approximation') {
-    const distances = responses.map((response) => ({ response, distance: Math.abs(Number(JSON.parse(response.payload)) - card.solution.value) }))
-    const nearest = Math.min(...distances.map((entry) => entry.distance))
-    const winnerTeamIds = distances.filter((entry) => entry.distance === nearest).map((entry) => entry.response.teamId)
+    const answersMap: Record<string, number> = {}
+    for (const response of responses) {
+      answersMap[response.teamId] = Number(JSON.parse(response.payload))
+    }
+    const approxResult = evaluateApproximation(answersMap, card.solution.value)
+    const winnerTeamIds = approxResult.winners as Id<'teams'>[]
+
     await Promise.all(winnerTeamIds.map(async (teamId) => {
       const team = await ctx.db.get(teamId)
       if (team) await ctx.db.patch(teamId, { correctMarks: (team.correctMarks ?? 0) + 1 })
@@ -1080,9 +1084,19 @@ async function calculateAutomaticResult(ctx: MutationCtx, room: NonNullable<Awai
     let score = 0
 
     if (card.category === 'sequence') {
-      score = (answer as string[]).filter((item, index) => item === card.correctOrder[index]).length
+      const itemIndices = (answer as string[]).map((item) => card.items.indexOf(item))
+      const correctIndices = card.correctOrder.map((item) => card.items.indexOf(item))
+      score = evaluateSequence(itemIndices, correctIndices).correctCount
     } else if (card.category === 'association') {
-      score = (answer as Array<{ left: string; right: string }>).filter((pair) => card.pairs.some((correct) => correct.left === pair.left && correct.right === pair.right)).length
+      const submittedMap: Record<string, string> = {}
+      for (const pair of answer as Array<{ left: string; right: string }>) {
+        submittedMap[pair.left] = pair.right
+      }
+      const correctMap: Record<string, string> = {}
+      for (const pair of card.pairs) {
+        correctMap[pair.left] = pair.right
+      }
+      score = evaluateAssociation(submittedMap, correctMap).correctCount
     }
     return { response, score }
   }).sort((left, right) => right.score - left.score || left.response.submittedAt - right.response.submittedAt)
@@ -1156,12 +1170,19 @@ async function settleRound(
   })))
 
   const challengerWon = result.winnerTeamIds.length === 1 && result.winnerTeamIds[0] === challenger._id
-  const nextStreak = challengerWon ? (challenger.turnWins ?? 0) + 1 : 0
-  const continueWithChallenger = challengerWon && nextStreak < 3
   const activeTeams = teams.filter((team) => team.status === 'connected')
-  const nextTeam = continueWithChallenger ? challenger : nextActiveTeam(activeTeams, challenger._id)
+  const currentTurnIndex = activeTeams.findIndex((team) => team._id === challenger._id)
 
-  await ctx.db.patch(challenger._id, { turnWins: continueWithChallenger ? nextStreak : 0 })
+  const turnProgression = resolveTurnProgression({
+    consecutiveWins: challenger.turnWins ?? 0,
+    challengerWon,
+    currentTurnIndex: currentTurnIndex >= 0 ? currentTurnIndex : 0,
+    totalTeams: activeTeams.length,
+  })
+
+  const nextTeam = activeTeams[turnProgression.nextTurnIndex] ?? challenger
+
+  await ctx.db.patch(challenger._id, { turnWins: turnProgression.nextConsecutiveWins })
   await ctx.db.patch(room._id, {
     approximationRemainder: round.category === 'approximation' ? remainder : room.approximationRemainder,
     round: { ...round, phase: 'resolved', result: { ...result, payout: share } },
