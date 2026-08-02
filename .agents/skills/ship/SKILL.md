@@ -19,7 +19,7 @@ Unlike most repos, here you run the deploy and the push yourself — the owner h
 
 ## 1. Quality checks
 
-Run the `pre-push-checks` skill. The project's own sequence is `bun run check`: build, then lint, then typecheck. There is no test script — say "no tests in this repo" rather than silently skipping the step. Always `bun`, never `npx` / `npm` / `pnpm`. Stop and fix on failure; never weaken a check to make it pass.
+Run unit tests (`bun test`) AND the full production build (`bunx vite build`). Never rely solely on unit tests. If running inside sandbox causes directory errors, run `bunx vite build` with bypass to verify zero compilation or bundler errors before committing or pushing. Always fix failures immediately; never push unverified builds.
 
 ## 2. Self-audit
 
