@@ -309,6 +309,18 @@ function LobbyPanel({
   }
 
   if (lobby.phase === 'active') {
+    if (lobby.self.isEliminated) {
+      return (
+        <section className="mt-6 rounded-[1.8rem] border-2 border-ink bg-coral/15 p-5 text-left">
+          <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-coral">Equipo eliminado</p>
+          <h2 className="mt-2 font-display text-3xl tracking-[-0.05em]">Tu equipo se quedó sin fondos.</h2>
+          <p className="mt-3 text-sm font-semibold text-ink/70">
+            Quedaste eliminado de la partida por no poder cubrir la apuesta o el derecho de paso. Puedes seguir el juego desde la pantalla companion.
+          </p>
+        </section>
+      )
+    }
+
     const isMyTurn = lobby.turnTeamId === lobby.self.id
     const round = lobby.round
     const target = round?.targetId ? lobby.teams.find((team) => team.id === round.targetId) : undefined
@@ -392,7 +404,7 @@ function RoundPanel({
     return <div className="mt-3 rounded-2xl bg-saffron/30 p-3">
       <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/60">{category} · tope ${round.maxBet}</p>
       <p className="mt-1 font-display text-2xl tracking-[-0.05em]">Elegí al retado.</p>
-      {isChallenger ? <div className="mt-3 grid gap-2">{teams.filter((team) => team.id !== round.challengerId).map((team) => <button key={team.id} type="button" disabled={isBusy} className="flex min-h-12 items-center gap-3 rounded-xl bg-paper px-3 py-3 text-left font-bold transition-transform active:scale-[0.98] disabled:opacity-45" onClick={() => onChooseRival(team.id)}><span className="h-3 w-3 rounded-full" style={{ backgroundColor: team.color }} />{pendingAction === 'rival' ? 'Eligiendo rival…' : team.name}<span className="ml-auto text-xs text-ink/55">${team.money}</span></button>)}</div> : <p className="mt-2 text-sm font-semibold">El retador elige quién responde.</p>}
+      {isChallenger ? <div className="mt-3 grid gap-2">{teams.filter((team) => team.id !== round.challengerId && !team.isEliminated).map((team) => <button key={team.id} type="button" disabled={isBusy} className="flex min-h-12 items-center gap-3 rounded-xl bg-paper px-3 py-3 text-left font-bold transition-transform active:scale-[0.98] disabled:opacity-45" onClick={() => onChooseRival(team.id)}><span className="h-3 w-3 rounded-full" style={{ backgroundColor: team.color }} />{pendingAction === 'rival' ? 'Eligiendo rival…' : team.name}<span className="ml-auto text-xs text-ink/55">${team.money}</span></button>)}</div> : <p className="mt-2 text-sm font-semibold">El retador elige quién responde.</p>}
     </div>
   }
 
@@ -592,7 +604,7 @@ type TeamLobby = {
     requiredResponseCount: number
   } | null
   shopEligible: boolean
-  self: { id: Id<'teams'>; isHost: boolean; money: number; name: string; position: number }
+  self: { id: Id<'teams'>; isHost: boolean; isEliminated?: boolean; money: number; name: string; position: number }
   turnTeamId?: Id<'teams'>
   winnerTeamId?: Id<'teams'>
   teams: Team[]

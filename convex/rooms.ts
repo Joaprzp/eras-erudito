@@ -206,17 +206,18 @@ export const teamLobby = query({
         hasSubmitted: roundState.submittedTeamIds.includes(team._id),
         requiredResponseCount: roundState.requiredResponseCount,
       } : null,
-      self: { id: team._id, isHost: team.isHost, money: team.money ?? 0, name: team.name, position: team.position ?? 0 },
+      self: { id: team._id, isHost: team.isHost, isEliminated: team.status === 'eliminated', money: team.money ?? 0, name: team.name, position: team.position ?? 0 },
       shopEligible: room.shopTeamId === team._id,
       turnTeamId: room.turnTeamId,
       winnerTeamId: room.winnerTeamId,
-      teams: teams.map(({ _id, answeredCards, coins, color, correctMarks, isHost, joinIndex, money, name, position, totalResponseMs }) => ({
+      teams: teams.map(({ _id, answeredCards, coins, color, correctMarks, isHost, joinIndex, money, name, position, status, totalResponseMs }) => ({
         answeredCards: answeredCards ?? 0,
         coins: coins ?? 0,
         id: _id,
         color,
         correctMarks: correctMarks ?? 0,
         isHost,
+        isEliminated: status === 'eliminated',
         joinIndex,
         money: money ?? 0,
         name,
@@ -918,7 +919,8 @@ async function awardStartPassage(
   await Promise.all(patches)
 
   await finishIfWinner(ctx, room._id, traveler._id, coins)
-  if (survivingRivals === 0) {
+  const remainingActiveTeams = teams.filter((t) => t._id === traveler._id || (t.status === 'connected' && t._id !== traveler._id && (t.money ?? 0) >= 500))
+  if (survivingRivals === 0 || remainingActiveTeams.length <= 1) {
     await ctx.db.patch(room._id, { phase: 'finished', winnerTeamId: traveler._id })
     return true
   }

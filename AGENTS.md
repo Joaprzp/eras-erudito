@@ -16,6 +16,11 @@ The five default triage labels are used. See `docs/agents/triage-labels.md`.
 
 Two repo-owned skills bookend a session: `prime` loads context at the start, `ship` closes a batch out. See `.agents/skills/prime/SKILL.md` and `.agents/skills/ship/SKILL.md`.
 
+### Build and deploy guard rails
+
+- **Vite build verification**: Always run `bunx vite build` to verify zero bundler/type errors before any commit or push. Never rely solely on unit tests.
+- **Convex deploy sequence**: When modifying Convex backend logic or schemas, always deploy Convex first (`bunx convex deploy --yes`) before pushing git commits to main.
+
 ### Domain docs
 
 This repository uses a single domain context: `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
