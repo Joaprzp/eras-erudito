@@ -13,24 +13,17 @@ import {
   type OrthographicCamera,
 } from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-
-export type BoardCategory = 'sequence' | 'association' | 'common' | 'approximation'
-
-export type BoardSpace = {
-  category: BoardCategory
-  isShop: boolean
-  maxBet: number
-}
-
-export type BoardTeam = {
-  id: string
-  coins: number
-  color: string
-  joinIndex: number
-  money: number
-  name: string
-  position: number
-}
+import {
+  CameraMotionController,
+  CATEGORY_COLORS,
+  TILE_DEPTH,
+  TILE_GAP,
+  TILE_WIDTH,
+  TOTAL_SPACES,
+  type BoardCategory,
+  type BoardSpace,
+  type BoardTeam,
+} from './board3d'
 
 type Board3DProps = {
   activeTeamId?: string
@@ -45,49 +38,6 @@ type Board3DProps = {
 type Board3DState = {
   hasError: boolean
 }
-
-class CameraMotionController {
-  private holdElapsed = 0
-  private phase: 'idle' | 'follow' | 'hold' | 'return' = 'idle'
-  readonly target = new Vector3()
-
-  get mode() {
-    return this.phase
-  }
-
-  follow(position: Vector3) {
-    this.target.copy(position)
-    this.phase = 'follow'
-  }
-
-  track(position: Vector3) {
-    this.target.copy(position)
-  }
-
-  land(position: Vector3) {
-    this.target.copy(position)
-    this.holdElapsed = 0
-    this.phase = 'hold'
-  }
-
-  advance(delta: number) {
-    if (this.phase !== 'hold') return
-    this.holdElapsed += delta
-    if (this.holdElapsed >= 0.32) this.phase = 'return'
-  }
-
-  reset() {
-    this.holdElapsed = 0
-    this.phase = 'idle'
-    this.target.set(0, 0, 0)
-  }
-}
-
-const TOTAL_SPACES = 54
-const TILE_WIDTH = 1.06
-const TILE_DEPTH = 0.78
-const TILE_GAP = 0.14
-const CATEGORY_COLORS: Record<BoardCategory, string> = {
   sequence: '#e85f4a',
   association: '#e5ad22',
   common: '#63c5a0',
