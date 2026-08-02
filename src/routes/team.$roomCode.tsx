@@ -267,7 +267,9 @@ function teamActivity(lobby: Exclude<TeamLobby, null | undefined>, isMyTurn: boo
   if (round.phase === 'ready_to_reveal') return 'Las respuestas están listas para revelar.'
   if (round.phase === 'revealed') {
     if (round.category !== 'common') return 'La pantalla companion muestra la solución.'
-    return round.judge?.status === 'deliberating' ? 'Un juez imparcial está evaluando las respuestas.' : 'El anfitrión está evaluando las respuestas.'
+    if (round.judge?.status === 'deliberating') return 'Un juez imparcial está evaluando las respuestas.'
+    if (round.judge?.status === 'deferred') return 'El juez se abstuvo; decide el anfitrión.'
+    return 'El anfitrión está evaluando las respuestas.'
   }
   return 'La ronda se resolvió; el anfitrión continuará la partida.'
 }
@@ -460,7 +462,7 @@ function RoundPanel({
       <p className="font-display text-2xl tracking-[-0.05em]">{isDeliberating ? 'El juez está deliberando.' : 'Alguien tiene que decidir.'}</p>
       {self.isHost
         ? <HostRulingControls challengerName={teams.find((team) => team.id === round.challengerId)?.name ?? 'el retador'} targetName={target?.name ?? 'el retado'} isBusy={isBusy} judge={round.judge} pendingAction={pendingAction} onRequestRuling={onRequestRuling} onResolveCommon={onResolveCommon} />
-        : <p className="mt-2 text-sm font-semibold text-ink/70">{isDeliberating ? 'Un juez imparcial está evaluando las respuestas.' : 'El anfitrión está evaluando las respuestas.'}</p>}
+        : <p className="mt-2 text-sm font-semibold text-ink/70">{isDeliberating ? 'Un juez imparcial está evaluando las respuestas.' : round.judge?.status === 'deferred' ? 'El juez se abstuvo; decide el anfitrión.' : 'El anfitrión está evaluando las respuestas.'}</p>}
     </div>
   }
 
@@ -505,11 +507,17 @@ function HostRulingControls({ challengerName, targetName, isBusy, judge, pending
     : pendingAction === 'ruling' ? 'Llamando al juez…'
     : 'Que decida el juez'
 
+  const isDeferred = judge?.status === 'deferred'
+
   return <div className="mt-3 rounded-xl border border-ink/15 bg-paper/45 p-3">
     <p className="text-[0.58rem] font-black uppercase tracking-[0.16em] text-ink/55">Control de anfitrión</p>
+    {isDeferred ? <div className="mt-2 rounded-lg border border-ink/20 bg-mint/45 px-3 py-2">
+      <p className="text-[0.56rem] font-black uppercase tracking-[0.16em] text-ink/55">El juez se abstiene · su opinión</p>
+      <p className="mt-1 text-sm font-semibold leading-snug text-ink/80">{judge.rationale ?? 'No dejó fundamento.'}</p>
+    </div> : null}
     {judge?.status === 'failed' ? <p className="mt-2 rounded-lg bg-coral/20 px-3 py-2 text-xs font-semibold text-coral">El juez no pudo resolver: {judge.error ?? 'error desconocido'}. Decidí vos o volvé a intentarlo.</p> : null}
-    <button type="button" disabled={isBusy || (isDeliberating && !canRetry)} className="mt-2 min-h-12 w-full rounded-xl bg-mint px-4 py-3 text-sm font-black text-ink disabled:opacity-45" onClick={onRequestRuling}>{judgeLabel}</button>
-    <p className="mt-3 text-[0.58rem] font-black uppercase tracking-[0.16em] text-ink/55">O resolvelo vos</p>
+    {isDeferred ? null : <button type="button" disabled={isBusy || (isDeliberating && !canRetry)} className="mt-2 min-h-12 w-full rounded-xl bg-mint px-4 py-3 text-sm font-black text-ink disabled:opacity-45" onClick={onRequestRuling}>{judgeLabel}</button>}
+    <p className="mt-3 text-[0.58rem] font-black uppercase tracking-[0.16em] text-ink/55">{isDeferred ? 'Tu decisión' : 'O resolvelo vos'}</p>
     <div className="mt-2 grid gap-2">
       <button type="button" disabled={isBusy} className="min-h-12 rounded-xl bg-ink px-4 py-3 text-sm font-black text-paper disabled:opacity-45" onClick={() => onResolveCommon('challenger')}>{pendingAction === 'resolve' ? 'Resolviendo…' : `Gana ${challengerName}`}</button>
       <button type="button" disabled={isBusy} className="min-h-12 rounded-xl bg-paper px-4 py-3 text-sm font-black disabled:opacity-45" onClick={() => onResolveCommon('target')}>Gana {targetName}</button>
@@ -584,7 +592,7 @@ const CATEGORY_LABELS = { sequence: 'Secuencia', association: 'Asociación', com
 
 type Team = { id: Id<'teams'>; coins: number; color: string; isHost: boolean; joinIndex: number; money: number; name: string; position: number }
 
-type Judge = { status: 'deliberating' | 'decided' | 'failed'; requestedAt: number; rationale?: string; error?: string }
+type Judge = { status: 'deliberating' | 'decided' | 'deferred' | 'failed'; requestedAt: number; rationale?: string; error?: string }
 
 type TeamLobby = {
   code: string

@@ -580,6 +580,21 @@ export const applyCommonRuling = internalMutation({
   },
 })
 
+export const deferCommonRuling = internalMutation({
+  args: { ...commonRulingArgs, rationale: v.string() },
+  handler: async (ctx, args) => {
+    const deliberation = await loadDeliberatingRound(ctx, args)
+
+    if (!deliberation) return
+    const { room, round, judge } = deliberation
+
+    await ctx.db.patch(room._id, {
+      round: { ...round, judge: { ...judge, status: 'deferred', rationale: args.rationale } },
+      lastActivityAt: Date.now(),
+    })
+  },
+})
+
 export const failCommonRuling = internalMutation({
   args: { ...commonRulingArgs, error: v.string() },
   handler: async (ctx, args) => {

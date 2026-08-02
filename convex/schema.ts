@@ -46,7 +46,7 @@ export default defineSchema({
         winnerTeamIds: v.array(v.id('teams')),
       })),
       judge: v.optional(v.object({
-        status: v.union(v.literal('deliberating'), v.literal('decided'), v.literal('failed')),
+        status: v.union(v.literal('deliberating'), v.literal('decided'), v.literal('deferred'), v.literal('failed')),
         requestedAt: v.number(),
         rationale: v.optional(v.string()),
         error: v.optional(v.string()),

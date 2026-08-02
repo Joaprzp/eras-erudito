@@ -88,7 +88,7 @@ La resolución de una ronda de En Común: gana el Retador, gana el Retado o hay 
 _Avoid_: corrección, veredicto
 
 **Juez**:
-El tercero imparcial al que el Anfitrión puede delegar el Fallo de una ronda de En Común, para no tener que decidir él mismo entre respuestas defendibles. Emite un único Fallo acompañado de un fundamento que se muestra en la Pantalla companion. El Anfitrión elige si lo convoca y conserva siempre la potestad de resolver por su cuenta.
+El tercero imparcial al que el Anfitrión puede delegar el Fallo de una ronda de En Común, para no tener que decidir él mismo entre respuestas defendibles. Emite un Fallo o se abstiene, y en ambos casos deja un fundamento que se muestra en la Pantalla companion; cuando se abstiene ese fundamento es su opinión y el Fallo vuelve al Anfitrión. El Anfitrión elige si lo convoca y conserva siempre la potestad de resolver por su cuenta.
 _Avoid_: árbitro automático, moderador, corrector
 
 **Aproximación**:

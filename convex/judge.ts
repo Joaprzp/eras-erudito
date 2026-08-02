@@ -7,19 +7,19 @@ import { internalAction } from './_generated/server'
 import { commonRulingArgs } from './schema'
 
 const MODEL = 'claude-sonnet-5'
-const OUTCOMES = ['challenger', 'target', 'tie'] as const
+const OUTCOMES = ['challenger', 'target', 'tie', 'defer'] as const
 
 const RULING_SCHEMA = {
   type: 'object',
   properties: {
     outcome: {
       type: 'string',
-      enum: ['challenger', 'target', 'tie'],
-      description: 'challenger si gana el Retador, target si gana el Retado, tie si hay Empate.',
+      enum: ['challenger', 'target', 'tie', 'defer'],
+      description: 'challenger si gana el Retador, target si gana el Retado, tie si hay Empate, defer si te abstenés y decide el anfitrión.',
     },
     rationale: {
       type: 'string',
-      description: 'Una o dos oraciones en español explicando el fallo a la mesa. Sin markdown.',
+      description: 'Dos o tres oraciones en español. Si fallás, explicá el fallo a la mesa; si te abstenés, es tu opinión para el anfitrión. Sin markdown.',
     },
   },
   required: ['outcome', 'rationale'],
@@ -30,17 +30,20 @@ const SYSTEM_PROMPT = `Sos el juez imparcial de una partida de El Erudito, un ju
 
 Resolvés rondas de la categoría "En Común": se muestran varios elementos y cada equipo escribe con sus palabras la característica que comparten. Recibís las pistas, la respuesta oficial de la tarjeta y las respuestas de los dos equipos, en el orden en que las confirmaron.
 
-Criterio de fallo:
-1. Una respuesta es aceptable si identifica la característica compartida, aunque esté redactada distinto a la respuesta oficial. Aceptá sinónimos, paráfrasis y formulaciones más generales o más específicas que sigan siendo correctas. No exijas la redacción exacta ni penalices la ortografía.
-2. Si solo una respuesta es aceptable, gana ese equipo.
-3. Si ninguna respuesta es aceptable, el resultado es Empate.
-4. Si las dos son aceptables, gana la que capta mejor el vínculo. Si son genuinamente equivalentes, el Empate es el fallo correcto: no las desempates por velocidad. El orden de confirmación es información de apoyo que podés mencionar, no una regla.
+Qué cuenta como respuesta:
+Una respuesta es aceptable solo si nombra la característica que comparten los elementos. Aceptá sinónimos, paráfrasis y formulaciones más generales o más específicas que sigan siendo correctas: no exijas la redacción de la tarjeta ni penalices la ortografía.
 
-Sos generoso pero riguroso: la gracia del juego es que la respuesta demuestre que entendieron el vínculo, no que adivinen la formulación de la tarjeta. Ante una respuesta tan vaga que sería válida para casi cualquier grupo de elementos, no la aceptes.
+No son respuestas: una palabra suelta que no nombra ninguna característica, una frase hecha, un comentario sobre el juego, algo que parece un tanteo al azar o un error de tipeo, y nombrar la categoría a la que ya se ve que pertenecen los elementos sin decir qué los une. Si las pistas son cinco películas, "son películas" no responde nada: el vínculo es lo que las separa de cualquier otra película.
 
-Un Empate devuelve las apuestas y termina el turno del retador, así que no lo elijas para evitar decidir: usalo cuando de verdad ninguna respuesta se impone sobre la otra.
+Criterio de fallo, en este orden:
+1. Si alguna de las dos respuestas es tan vaga, ambigua o incompleta que no podés clasificarla con confianza —aun leyéndola con la mejor intención— devolvé "defer" y decide el anfitrión. No adivines qué quiso decir un equipo ni le concedas la ronda por descarte porque el otro respondió peor. Esta regla se evalúa primero y manda sobre las demás.
+2. Si las dos son aceptables, gana la que capta mejor el vínculo. Si son genuinamente equivalentes, es Empate: no las desempates por velocidad. El orden de confirmación es información de apoyo que podés mencionar, no una regla.
+3. Si una sola es aceptable y la otra dice algo concreto pero equivocado, gana la aceptable.
+4. Si las dos dicen algo concreto y las dos están equivocadas, es Empate.
 
-El fundamento va dirigido a la mesa, breve y sin rodeos. Nombrá a los equipos por su nombre. No felicites ni pidas disculpas.`
+Las dos salidas tienen un costo, así que no abuses de ninguna. El Empate devuelve las apuestas y termina el turno del retador: usalo cuando ninguna respuesta se impone, no para evitar decidir. El "defer" interrumpe el juego y le pasa el problema a una persona: usalo cuando de verdad no se entiende qué contestaron, no cuando la respuesta es clara y simplemente tenés que elegir.
+
+El fundamento va dirigido a la mesa, breve y sin rodeos. Nombrá a los equipos por su nombre. No felicites ni pidas disculpas. Cuando te abstengas, el fundamento es tu opinión para el anfitrión: decí qué entendiste de cada respuesta, por qué no te alcanza para fallar y hacia dónde te inclinarías si tuvieras que elegir.`
 
 type RulingInput = {
   clues: string[]
@@ -55,8 +58,13 @@ export const decideCommon = internalAction({
       const input = await ctx.runQuery(internal.rooms.commonRulingInput, args)
 
       if (!input) return
-      const ruling = await askJudge(input)
-      await ctx.runMutation(internal.rooms.applyCommonRuling, { ...args, ...ruling })
+      const { outcome, rationale } = await askJudge(input)
+
+      if (outcome === 'defer') {
+        await ctx.runMutation(internal.rooms.deferCommonRuling, { ...args, rationale })
+        return
+      }
+      await ctx.runMutation(internal.rooms.applyCommonRuling, { ...args, outcome, rationale })
     } catch (caughtError) {
       const error = caughtError instanceof Error ? caughtError.message : 'El juez no pudo responder.'
       await ctx.runMutation(internal.rooms.failCommonRuling, { ...args, error })
@@ -124,7 +132,7 @@ function parseRuling(text: string, input: RulingInput) {
   const outcome = OUTCOMES.find((candidate) => candidate === ruling.outcome)
 
   if (!outcome) throw new Error('El juez no eligió un resultado válido.')
-  if (outcome !== 'tie' && !input.answers.some((answer) => answer.role === outcome)) {
+  if (outcome !== 'tie' && outcome !== 'defer' && !input.answers.some((answer) => answer.role === outcome)) {
     throw new Error('El juez falló a favor de un equipo que no respondió.')
   }
 

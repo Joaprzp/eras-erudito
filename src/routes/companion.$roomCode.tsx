@@ -447,6 +447,13 @@ function JudgePanel({ judge }: { judge: Judge }) {
     return <div className="mt-5 rounded-2xl bg-ink/8 px-4 py-3"><p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/55">Juez</p><p className="mt-1 font-display text-2xl tracking-[-0.04em]">No pudo resolver. Decide el anfitrión.</p></div>
   }
 
+  if (judge.status === 'deferred') {
+    return <div className="mt-5 rounded-2xl border-2 border-dashed border-ink/25 bg-mint/25 px-4 py-3">
+      <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/55">El juez se abstiene · decide el anfitrión</p>
+      {judge.rationale ? <p className="mt-1.5 text-base font-semibold leading-snug text-ink/85 sm:text-lg">{judge.rationale}</p> : null}
+    </div>
+  }
+
   return <div className="mt-5 rounded-2xl border-2 border-ink/15 bg-mint/35 px-4 py-3">
     <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/55">Fallo del juez</p>
     {judge.rationale ? <p className="mt-1.5 text-base font-semibold leading-snug text-ink/85 sm:text-lg">{judge.rationale}</p> : null}
@@ -491,6 +498,7 @@ function roundMessage(round: NonNullable<CompanionLobby['round']>, teams: Compan
   if (round.phase === 'ready_to_reveal') return 'Todas las respuestas están listas.'
   if (round.phase === 'resolved') return 'Ronda resuelta.'
   if (round.judge?.status === 'deliberating') return 'El juez está deliberando.'
+  if (round.judge?.status === 'deferred') return 'El juez se abstuvo: decide el anfitrión.'
   return 'Tarjeta revelada.'
 }
 
@@ -526,7 +534,7 @@ type CompanionLobby = {
   winnerTeamId?: Id<'teams'>
 }
 
-type Judge = { status: 'deliberating' | 'decided' | 'failed'; requestedAt: number; rationale?: string; error?: string }
+type Judge = { status: 'deliberating' | 'decided' | 'deferred' | 'failed'; requestedAt: number; rationale?: string; error?: string }
 
 const CATEGORY_LABELS = { sequence: 'Secuencia', association: 'Asociación', common: 'En común', approximation: 'Aproximación' }
 
