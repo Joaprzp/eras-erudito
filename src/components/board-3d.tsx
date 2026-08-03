@@ -546,19 +546,12 @@ function LandingPulse({ color }: { color: string }) {
     const visibility = Math.sin(progress * Math.PI)
     if (ripple.current) ripple.current.scale.setScalar(0.72 + progress * 0.9)
     if (ringMaterial.current) ringMaterial.current.opacity = visibility * 0.9
-    if (outlineMaterial.current) outlineMaterial.current.opacity = (1 - progress) * 0.72
     if (progress < 1) invalidate()
   })
 
   return (
-    <group>
-      <group ref={ripple} position={[0, 0.285, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <mesh><ringGeometry args={[0.27, 0.34, 28]} /><meshBasicMaterial ref={ringMaterial} color={PAPER} opacity={0} transparent toneMapped={false} /></mesh>
-      </group>
-      <mesh position={[0, 0.135, 0]}>
-        <boxGeometry args={[TILE_WIDTH + 0.1, 0.27, TILE_DEPTH + 0.1]} />
-        <meshBasicMaterial ref={outlineMaterial} color={color} opacity={0.72} transparent toneMapped={false} wireframe />
-      </mesh>
+    <group ref={ripple} position={[0, 0.285, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh><ringGeometry args={[0.27, 0.42, 32]} /><meshBasicMaterial ref={ringMaterial} color={color} opacity={0} transparent toneMapped={false} /></mesh>
     </group>
   )
 }
