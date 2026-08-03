@@ -11,15 +11,19 @@ type TeamLobbyProps = {
   onStart: () => void
   onLeave: () => void
   onRemove: (teamId: Id<'teams'>) => void
+  timerEnabled?: boolean
+  onToggleTimer?: () => void
 }
 
 export function TeamLobby({
   lobby,
   error,
   pendingAction,
+  timerEnabled,
   onStart,
   onLeave,
   onRemove,
+  onToggleTimer,
 }: TeamLobbyProps) {
   const isHost = lobby.self.isHost
 
@@ -59,6 +63,25 @@ export function TeamLobby({
           </div>
         ))}
       </div>
+
+      {isHost ? (
+        <div className="mt-4 flex items-center justify-between rounded-xl bg-ink/5 p-3">
+          <div>
+            <p className="text-xs font-bold text-ink">Temporizador de Aproximación (45s)</p>
+            <p className="text-[0.65rem] font-medium text-ink/60">Auto-completa con "0" al expirar</p>
+          </div>
+          <button
+            type="button"
+            disabled={Boolean(pendingAction)}
+            onClick={onToggleTimer}
+            className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-wider transition-colors ${
+              timerEnabled ? 'bg-mint text-ink' : 'bg-paper/20 text-ink/50 border border-ink/20'
+            }`}
+          >
+            {timerEnabled ? 'Activo' : 'Inactivo'}
+          </button>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="mt-4 rounded-xl bg-coral/20 px-3 py-2 text-sm font-semibold text-coral">{error}</p>

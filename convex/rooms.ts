@@ -153,6 +153,7 @@ export const companionLobby = query({
       round: room.round,
       roundState,
       shopTeamId: room.shopTeamId,
+      timerEnabled: room.timerEnabled ?? false,
       turnTeamId: room.turnTeamId,
       winnerTeamId: room.winnerTeamId,
       teams: teams
@@ -208,6 +209,7 @@ export const teamLobby = query({
       } : null,
       self: { id: team._id, isHost: team.isHost, isEliminated: team.status === 'eliminated', money: team.money ?? 0, name: team.name, position: team.position ?? 0 },
       shopEligible: room.shopTeamId === team._id,
+      timerEnabled: room.timerEnabled ?? false,
       turnTeamId: room.turnTeamId,
       winnerTeamId: room.winnerTeamId,
       teams: teams.map(({ _id, answeredCards, coins, color, correctMarks, isHost, joinIndex, money, name, position, status, totalResponseMs }) => ({
@@ -400,6 +402,22 @@ export const chooseBet = mutation({
   },
 })
 
+export const toggleTimer = mutation({
+  args: { code: v.string(), token: v.string() },
+  handler: async (ctx, args) => {
+    const { room, team } = await requireLobbyTeam(ctx, args)
+
+    if (!team.isHost) {
+      throw new Error('Solo el anfitrión puede cambiar la configuración del temporizador.')
+    }
+
+    await ctx.db.patch(room._id, {
+      timerEnabled: !room.timerEnabled,
+      lastActivityAt: Date.now(),
+    })
+  },
+})
+
 export const drawCard = mutation({
   args: { code: v.string(), token: v.string() },
   handler: async (ctx, args) => {
@@ -413,15 +431,21 @@ export const drawCard = mutation({
     const available = categoryDeck.filter((card) => !usedCardIds.includes(card.id))
     const candidates = available.length > 0 ? available : categoryDeck
     const card = candidates[randomIndex(candidates.length)]
+    const roundId = crypto.randomUUID()
+    const timerEndsAt = round.category === 'approximation' && room.timerEnabled ? Date.now() + 45000 : undefined
 
     await ctx.db.patch(room._id, {
-      round: { ...round, cardId: card.id, phase: 'answering', roundId: crypto.randomUUID(), startedAt: Date.now() },
+      round: { ...round, cardId: card.id, phase: 'answering', roundId, startedAt: Date.now(), timerEndsAt },
       usedCardIds: available.length > 0 ? [...usedCardIds, card.id] : [
         ...usedCardIds.filter((cardId) => !categoryDeck.some((deckCard) => deckCard.id === cardId)),
         card.id,
       ],
       lastActivityAt: Date.now(),
     })
+
+    if (timerEndsAt) {
+      await ctx.scheduler.runAfter(45000, internal.rooms.handleApproximationTimeout, { roomId: room._id, roundId })
+    }
 
     return { cardId: card.id, recycled: available.length === 0 }
   },
@@ -897,20 +921,13 @@ async function awardStartPassage(
   const patches: Array<Promise<void>> = []
 
   for (const rival of teams.filter((team) => team._id !== traveler._id && team.status === 'connected')) {
-    let money = rival.money ?? 0
-    let coins = rival.coins ?? 0
-
-    while (money < 500 && coins > 0) {
-      money += 1000
-      coins -= 1
-    }
-
-    if (money >= 500) {
+    const insolvency = resolveInsolvency(rival.money ?? 0, rival.coins ?? 0, 500)
+    if (insolvency.canPay) {
       survivingRivals += 1
       collected += 500
-      patches.push(ctx.db.patch(rival._id, { coins, money: money - 500 }))
+      patches.push(ctx.db.patch(rival._id, { coins: insolvency.newCoins, money: insolvency.newBalance - 500 }))
     } else {
-      patches.push(ctx.db.patch(rival._id, { coins, money, status: 'eliminated' }))
+      patches.push(ctx.db.patch(rival._id, { coins: insolvency.newCoins, money: insolvency.newBalance, status: 'eliminated' }))
     }
   }
 
@@ -1270,3 +1287,40 @@ function cleanTeamName(name: string) {
 
   return cleanName
 }
+
+export const handleApproximationTimeout = internalMutation({
+  args: { roomId: v.id('rooms'), roundId: v.string() },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId)
+    if (!room || !room.round || room.round.roundId !== args.roundId || room.round.phase !== 'answering') {
+      return
+    }
+
+    const round = room.round
+    const participants = await getRoundParticipants(ctx, room, round)
+    const existingResponses = await ctx.db
+      .query('responses')
+      .withIndex('by_round', (index) => index.eq('roundId', args.roundId))
+      .collect()
+
+    const answeredTeamIds = new Set(existingResponses.map((r) => r.teamId))
+    const missingParticipants = participants.filter((p) => !answeredTeamIds.has(p._id))
+
+    for (const team of missingParticipants) {
+      await ctx.db.insert('responses', {
+        roomId: room._id,
+        roundId: args.roundId,
+        teamId: team._id,
+        payload: JSON.stringify(0),
+        submittedAt: Date.now(),
+        responseMs: 45000,
+      })
+    }
+
+    const result = await calculateAutomaticResult(ctx, room, round)
+    await ctx.db.patch(room._id, {
+      round: { ...round, phase: 'revealed', result: { ...result, payout: round.wager ?? 0 } },
+      lastActivityAt: Date.now(),
+    })
+  },
+})

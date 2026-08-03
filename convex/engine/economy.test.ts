@@ -40,6 +40,26 @@ describe('Economy Module', () => {
     expect(result.isEliminated).toBe(true)
   })
 
+  test('resolveInsolvency eliminates team when balance $300 and 0 coins cannot cover $500 start fee', () => {
+    const result = resolveInsolvency(300, 0, 500)
+
+    expect(result.canPay).toBe(false)
+    expect(result.newBalance).toBe(300)
+    expect(result.newCoins).toBe(0)
+    expect(result.soldCoin).toBe(false)
+    expect(result.isEliminated).toBe(true)
+  })
+
+  test('resolveInsolvency sells coin to cover $500 start fee when balance is $300', () => {
+    const result = resolveInsolvency(300, 1, 500)
+
+    expect(result.canPay).toBe(true)
+    expect(result.newBalance).toBe(1300) // (300 + 1000)
+    expect(result.newCoins).toBe(0)
+    expect(result.soldCoin).toBe(true)
+    expect(result.isEliminated).toBe(false)
+  })
+
   test('transferPot awards pot amount to winner balance', () => {
     const balances = { teamA: 1800, teamB: 1800 }
     const updated = transferPot(balances, 'teamA', 400)

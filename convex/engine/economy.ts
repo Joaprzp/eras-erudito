@@ -27,32 +27,36 @@ export function calculateBetBounds(participantBalances: number[], tileCap: numbe
 /**
  * Resolves team insolvency when balance is below minimum bet requirement ($100).
  */
-export function resolveInsolvency(currentBalance: number, currentCoins: number): InsolvencyResult {
-  if (currentBalance >= 100) {
-    return {
-      canPay: true,
-      newBalance: currentBalance,
-      newCoins: currentCoins,
-      soldCoin: false,
-      isEliminated: false,
-    }
+export function resolveInsolvency(
+  currentBalance: number,
+  currentCoins: number,
+  requiredAmount: number = 100
+): InsolvencyResult {
+  let balance = currentBalance
+  let coins = currentCoins
+  let soldCoin = false
+
+  while (balance < requiredAmount && coins > 0) {
+    balance += 1000
+    coins -= 1
+    soldCoin = true
   }
 
-  if (currentCoins > 0) {
+  if (balance >= requiredAmount) {
     return {
       canPay: true,
-      newBalance: currentBalance + 1000,
-      newCoins: currentCoins - 1,
-      soldCoin: true,
+      newBalance: balance,
+      newCoins: coins,
+      soldCoin,
       isEliminated: false,
     }
   }
 
   return {
     canPay: false,
-    newBalance: currentBalance,
-    newCoins: 0,
-    soldCoin: false,
+    newBalance: balance,
+    newCoins: coins,
+    soldCoin,
     isEliminated: true,
   }
 }

@@ -30,6 +30,7 @@ function TeamRoom() {
   const advanceTurn = useMutation(api.rooms.advanceTurn)
   const chooseCategory = useMutation(api.rooms.chooseCategory)
   const buyCoin = useMutation(api.rooms.buyCoin)
+  const toggleTimer = useMutation(api.rooms.toggleTimer)
   const saveTeamSession = useSessionStore((state) => state.saveTeamSession)
   const clearTeamSession = useSessionStore((state) => state.clearTeamSession)
   const existingSession = useSessionStore((state) => state.teamsByRoom[roomCode])
@@ -156,6 +157,11 @@ function TeamRoom() {
   async function handleChooseCategory(category: 'sequence' | 'association' | 'common' | 'approximation') {
     if (!existingSession) return
     await runAction('category', () => chooseCategory({ code: roomCode, token: existingSession.token, category }), 'No pudimos elegir la categoría.')
+  }
+
+  async function handleToggleTimer() {
+    if (!existingSession) return
+    await runAction('toggle_timer', () => toggleTimer({ code: roomCode, token: existingSession.token }), 'No pudimos cambiar el temporizador.')
   }
 
   async function handleBuyCoin() {
@@ -349,9 +355,11 @@ function LobbyPanel({
       lobby={lobby}
       error={error}
       pendingAction={pendingAction}
+      timerEnabled={lobby.timerEnabled}
       onStart={onStart}
       onLeave={onLeave}
       onRemove={onRemove}
+      onToggleTimer={handleToggleTimer}
     />
   )
 }
@@ -430,9 +438,14 @@ function RoundPanel({
   const answersThisRound = round.category === 'approximation' || isChallenger || round.targetId === self.id
 
   if (round.phase === 'answering') {
-    if (roundState.hasSubmitted) return <WaitingCard count={roundState.requiredResponseCount} />
-    if (!answersThisRound) return <WaitingCard count={roundState.requiredResponseCount} />
-    return <AnswerCard card={roundState.card} isSubmitting={pendingAction === 'answer'} onSubmit={onSubmitResponse} />
+    if (roundState.hasSubmitted) return <WaitingCard count={roundState.requiredResponseCount} timerEndsAt={round.timerEndsAt} />
+    if (!answersThisRound) return <WaitingCard count={roundState.requiredResponseCount} timerEndsAt={round.timerEndsAt} />
+    return (
+      <div className="relative">
+        {round.timerEndsAt ? <div className="mb-2 flex justify-end"><CountdownBadge timerEndsAt={round.timerEndsAt} /></div> : null}
+        <AnswerCard card={roundState.card} isSubmitting={pendingAction === 'answer'} onSubmit={onSubmitResponse} />
+      </div>
+    )
   }
 
   if (round.phase === 'ready_to_reveal') {
@@ -512,9 +525,31 @@ function HostRulingControls({ challengerName, targetName, isBusy, judge, pending
   </div>
 }
 
-function WaitingCard({ count }: { count: number }) {
+function CountdownBadge({ timerEndsAt }: { timerEndsAt: number }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => Math.max(0, Math.ceil((timerEndsAt - Date.now()) / 1000)))
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((timerEndsAt - Date.now()) / 1000))
+      setSecondsLeft(remaining)
+      if (remaining <= 0) clearInterval(interval)
+    }, 500)
+    return () => clearInterval(interval)
+  }, [timerEndsAt])
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-wider ${secondsLeft <= 10 ? 'bg-coral text-paper animate-pulse' : 'bg-paper text-ink'}`}>
+      ⏱️ {secondsLeft}s
+    </span>
+  )
+}
+
+function WaitingCard({ count, timerEndsAt }: { count: number; timerEndsAt?: number }) {
   return <div className="mt-3 rounded-2xl bg-sky-200 p-3">
-    <p className="font-display text-2xl tracking-[-0.05em]">Respuesta guardada.</p>
+    <div className="flex items-center justify-between gap-2">
+      <p className="font-display text-2xl tracking-[-0.05em]">Respuesta guardada.</p>
+      {timerEndsAt ? <CountdownBadge timerEndsAt={timerEndsAt} /> : null}
+    </div>
     <p className="mt-2 text-sm font-semibold text-ink/70">Esperando el cierre de las demás respuestas. Participan {count} equipos y cada respuesta sigue privada.</p>
   </div>
 }
@@ -597,6 +632,7 @@ type TeamLobby = {
     result?: { kind: 'challenger' | 'target' | 'approximation' | 'tie'; payout: number; winnerTeamIds: Id<'teams'>[] }
     judge?: Judge
     isStart?: boolean
+    timerEndsAt?: number
   }
   roundState: {
     card: PublicCard
@@ -604,6 +640,7 @@ type TeamLobby = {
     requiredResponseCount: number
   } | null
   shopEligible: boolean
+  timerEnabled?: boolean
   self: { id: Id<'teams'>; isHost: boolean; isEliminated?: boolean; money: number; name: string; position: number }
   turnTeamId?: Id<'teams'>
   winnerTeamId?: Id<'teams'>

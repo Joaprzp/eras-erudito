@@ -35,4 +35,13 @@ describe('Scoring Module', () => {
     expect(result.winners.sort()).toEqual(['teamA', 'teamB']) // both distance = 5
     expect(result.isTie).toBe(true)
   })
+
+  test('evaluateApproximation handles auto-completed 0 fallback answer when timer expires', () => {
+    const answers = { teamA: 1975, teamB: 0 } // teamB timed out and got "0"
+    const target = 1970
+    const result = evaluateApproximation(answers, target)
+
+    expect(result.winners).toEqual(['teamA']) // |1975 - 1970| = 5 vs |0 - 1970| = 1970
+    expect(result.isTie).toBe(false)
+  })
 })
