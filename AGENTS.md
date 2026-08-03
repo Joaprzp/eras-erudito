@@ -18,6 +18,7 @@ Two repo-owned skills bookend a session: `prime` loads context at the start, `sh
 
 ### Build and deploy guard rails
 
+- **TDD and Unit Testing**: Always write unit/regression tests (`bun test`) for pure domain engine logic (`convex/engine/`), new features, and bug fixes before declaring completion.
 - **Vite build verification**: Always run `bunx vite build` to verify zero bundler/type errors before any commit or push. Never rely solely on unit tests.
 - **Convex deploy sequence**: When modifying Convex backend logic or schemas, always deploy Convex first (`bunx convex deploy --yes`) before pushing git commits to main.
 
