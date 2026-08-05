@@ -54,15 +54,27 @@ export const decideCommon = internalAction({
         threadId: args.threadId,
       })
 
-      const { object } = await thread.generateObject({
-        promptMessageId: args.promptMessageId,
-        schema: rulingSchema,
-        providerOptions: {
-          anthropic: {
-            thinking: { type: 'adaptive', display: 'summarized' },
-            effort: 'medium',
+      // Phase 1: stream reasoning so the client sees live thinking
+      const thinkingResult = await thread.streamText(
+        {
+          promptMessageId: args.promptMessageId,
+          providerOptions: {
+            anthropic: {
+              thinking: { type: 'adaptive', display: 'summarized' },
+              effort: 'medium',
+            },
           },
         },
+        { saveStreamDeltas: true },
+      )
+
+      // Wait for the reasoning stream to complete
+      await thinkingResult.text
+
+      // Phase 2: fast structured ruling (model already reasoned in Phase 1)
+      const { object } = await thread.generateObject({
+        prompt: 'Emití tu fallo formal según los criterios.',
+        schema: rulingSchema,
       })
 
       const outcome = OUTCOMES.find((candidate) => candidate === object.outcome)
