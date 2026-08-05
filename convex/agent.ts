@@ -1,3 +1,7 @@
+// Streaming infrastructure for the judge's live thinking.
+// Currently commented out — the judge falls back to the dynamic text indicator
+// while the model responds. Re-enable if we revisit live streaming.
+
 import { syncStreams } from '@convex-dev/agent'
 import { vStreamArgs } from '@convex-dev/agent/validators'
 import { components } from './_generated/api'

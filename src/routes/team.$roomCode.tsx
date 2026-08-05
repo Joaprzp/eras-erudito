@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery } from 'convex/react'
-import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { useStreamingUIMessages } from '@convex-dev/agent/react'
+import { FormEvent, useEffect, useState } from 'react'
 
 import { api } from '../../convex/_generated/api'
 import { MAX_TEAMS } from '../../convex/constants'
@@ -496,23 +495,6 @@ function HostRulingControls({ challengerName, targetName, isBusy, judge, pending
   const requestedAt = judge?.status === 'deliberating' ? judge.requestedAt : undefined
   const [staleRequestedAt, setStaleRequestedAt] = useState<number>()
 
-  const streamingMessages = useStreamingUIMessages(
-    api.agent.sync,
-    judge?.status === 'deliberating' && judge?.threadId ? { threadId: judge.threadId } : 'skip',
-  )
-
-  const thinking = useMemo(() => {
-    if (streamingMessages) {
-      const reasoning = streamingMessages
-        .flatMap((m) => m.parts ?? [])
-        .filter((part) => part.type === 'reasoning')
-        .map((part) => part.text)
-        .join('')
-      if (reasoning) return reasoning
-    }
-    return judge?.thinking ?? ''
-  }, [streamingMessages, judge?.thinking])
-
   useEffect(() => {
     if (requestedAt === undefined) return
 
@@ -536,9 +518,9 @@ function HostRulingControls({ challengerName, targetName, isBusy, judge, pending
       <p className="mt-1 text-sm font-semibold leading-snug text-ink/80">{judge.rationale ?? 'No dejó fundamento.'}</p>
     </div> : null}
     {judge?.status === 'failed' ? <p className="mt-2 rounded-lg bg-coral/20 px-3 py-2 text-xs font-semibold text-coral">El juez no pudo resolver: {judge.error ?? 'error desconocido'}. Decidí vos o volvé a intentarlo.</p> : null}
-    {isDeliberating && thinking ? <div className="mt-2 rounded-lg border border-mint/40 bg-mint/25 px-3 py-2">
+    {judge?.thinking ? <div className="mt-2 rounded-lg border border-mint/40 bg-mint/25 px-3 py-2">
       <p className="text-[0.5rem] font-black uppercase tracking-[0.16em] text-ink/55">Razonamiento del juez</p>
-      <p className="mt-1 text-xs font-semibold leading-snug text-ink/80 line-clamp-3">{thinking}</p>
+      <p className="mt-1 text-xs font-semibold leading-snug text-ink/80 line-clamp-3">{judge.thinking}</p>
       <span className="mt-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-coral" />
     </div> : null}
     {isDeferred ? null : <button type="button" disabled={isBusy || (isDeliberating && !canRetry)} className="mt-2 min-h-12 w-full rounded-xl bg-mint px-4 py-3 text-sm font-black text-ink disabled:opacity-45" onClick={onRequestRuling}>{judgeLabel}</button>}
