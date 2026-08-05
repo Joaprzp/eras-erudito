@@ -69,15 +69,17 @@ export const decideCommon = internalAction({
       if (!outcome) throw new Error('El juez no eligió un resultado válido.')
 
       const rationale = (object.rationale ?? '').trim().slice(0, 600) || 'El juez no dejó fundamento.'
+      const { threadId: _threadId, promptMessageId: _promptMessageId, ...mutationArgs } = args
 
       if (outcome === 'defer') {
-        await ctx.runMutation(internal.rooms.deferCommonRuling, { ...args, rationale })
+        await ctx.runMutation(internal.rooms.deferCommonRuling, { ...mutationArgs, rationale })
         return
       }
-      await ctx.runMutation(internal.rooms.applyCommonRuling, { ...args, outcome, rationale })
+      await ctx.runMutation(internal.rooms.applyCommonRuling, { ...mutationArgs, outcome, rationale })
     } catch (caughtError) {
       const error = caughtError instanceof Error ? caughtError.message : 'El juez no pudo responder.'
-      await ctx.runMutation(internal.rooms.failCommonRuling, { ...args, error })
+      const { threadId: _threadId, promptMessageId: _promptMessageId, ...mutationArgs } = args
+      await ctx.runMutation(internal.rooms.failCommonRuling, { ...mutationArgs, error })
     }
   },
 })
