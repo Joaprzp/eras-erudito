@@ -542,7 +542,7 @@ function HostRulingControls({ challengerName, targetName, isBusy, judge, pending
     <p className="mt-3 text-[0.58rem] font-black uppercase tracking-[0.16em] text-ink/55">{isDeferred ? 'Tu decisión' : 'O resolvelo vos'}</p>
     <div className="mt-2 grid gap-2">
       <button type="button" disabled={isBusy} className="min-h-12 rounded-xl bg-ink px-4 py-3 text-sm font-black text-paper disabled:opacity-45" onClick={() => onResolveCommon('challenger')}>{pendingAction === 'resolve' ? 'Resolviendo…' : `Gana ${challengerName}`}</button>
-      <button type="button" disabled={isBusy} className="min-h-12 rounded-xl bg-paper px-4 py-3 text-sm font-black disabled:opacity-45" onClick={() => onResolveCommon('target')}>Gana {targetName}</button>
+      <button type="button" disabled={isBusy} className="min-h-12 rounded-xl border border-ink/35 bg-paper px-4 py-3 text-sm font-black disabled:opacity-45" onClick={() => onResolveCommon('target')}>Gana {targetName}</button>
       <button type="button" disabled={isBusy} className="min-h-12 rounded-xl border border-ink/35 px-4 py-3 text-sm font-black disabled:opacity-45" onClick={() => onResolveCommon('tie')}>Empate</button>
     </div>
   </div>

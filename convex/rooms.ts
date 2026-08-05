@@ -586,22 +586,6 @@ export const requestCommonRuling = mutation({
   },
 })
 
-export const updateJudgeThinking = internalMutation({
-  args: {
-    ...commonRulingArgs,
-    thinking: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const room = await ctx.db.get(args.roomId)
-    if (!room || !room.round || room.round.roundId !== args.roundId) return
-    if (room.round.judge?.status !== 'deliberating') return
-
-    await ctx.db.patch(room._id, {
-      round: { ...room.round, judge: { ...room.round.judge, thinking: args.thinking } },
-    })
-  },
-})
-
 export const applyCommonRuling = internalMutation({
   args: {
     ...commonRulingArgs,

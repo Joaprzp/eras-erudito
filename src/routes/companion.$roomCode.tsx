@@ -453,7 +453,7 @@ function JudgePanel({ judge }: { judge: Judge }) {
 
   if (judge.status === 'deliberating') {
     if (showThinking && thinking) {
-      return <div aria-live="polite" className="mt-5 rounded-2xl border-2 border-mint/40 bg-mint/15 px-4 py-3">
+      return <div aria-live="polite" className="mt-5 rounded-2xl border-2 border-mint/40 bg-mint/20 px-4 py-3">
         <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/55">Juez deliberando</p>
         <p className="mt-1.5 text-sm font-semibold leading-snug text-ink/85 whitespace-pre-wrap">{thinking}</p>
         <span className="mt-1 inline-block h-2 w-2 animate-pulse rounded-full bg-coral" />
