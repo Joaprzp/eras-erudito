@@ -1,6 +1,9 @@
 'use node'
 
+import Anthropic from '@anthropic-ai/sdk'
+
 import { Agent } from '@convex-dev/agent'
+import { listMessages } from '@convex-dev/agent'
 import { anthropic } from '@ai-sdk/anthropic'
 import { z } from 'zod/v3'
 import { v } from 'convex/values'
@@ -50,40 +53,66 @@ export const decideCommon = internalAction({
   },
   handler: async (ctx, args) => {
     try {
-      const { thread } = await judgeAgent.continueThread(ctx, {
+      const apiKey = process.env.ANTHROPIC_API_KEY
+      if (!apiKey) throw new Error('Falta configurar la credencial del juez.')
+
+      // Read the saved prompt message to get the input
+      const allMessages = await listMessages(ctx, components.agent, {
         threadId: args.threadId,
+        paginationOpts: { cursor: null, numItems: 100 },
+      })
+      const promptMessage = Array.isArray(allMessages)
+        ? allMessages.find((m) => m._id === args.promptMessageId)
+        : undefined
+      const promptText = typeof promptMessage?.message?.content === 'string'
+        ? promptMessage.message.content
+        : Array.isArray(promptMessage?.message?.content)
+          ? promptMessage.message.content.map((c: any) => typeof c === 'string' ? c : c.text ?? '').join('')
+          : ''
+
+      // Phase 1: stream reasoning directly via Anthropic SDK
+      const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 60_000 })
+      const stream = client.messages.stream({
+        model: MODEL,
+        max_tokens: 8192,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: promptText }],
+        thinking: { type: 'adaptive' },
+        output_config: { effort: 'medium' },
       })
 
-      // Phase 1: stream reasoning so the client sees live thinking
-      const thinkingResult = await thread.streamText(
-        {
-          promptMessageId: args.promptMessageId,
-          providerOptions: {
-            anthropic: {
-              thinking: { type: 'adaptive', display: 'summarized' },
-              effort: 'medium',
-            },
-          },
-        },
-        { saveStreamDeltas: true },
-      )
+      let accumulatedThinking = ''
+      let finalText = ''
 
-      // Wait for the reasoning stream to complete
-      const fullText = await thinkingResult.text
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+          finalText += chunk.delta.text
+        }
+      }
 
-      // Save the thinking text to the room as a fallback (client reads judge.thinking)
-      const reasoningText = 'reasoningText' in thinkingResult ? (thinkingResult as any).reasoningText : fullText
-      if (reasoningText) {
-        const { threadId: _threadId, promptMessageId: _promptMessageId, ...rest } = args
+      const finalMessage = await stream.finalMessage()
+      // Extract thinking from the message content blocks
+      for (const block of finalMessage.content) {
+        if (block.type === 'thinking') {
+          accumulatedThinking += block.thinking
+        }
+      }
+
+      // Save thinking text to the room for live display
+      if (accumulatedThinking) {
+        const { threadId: _t, promptMessageId: _p, ...rest } = args
         await ctx.runMutation(internal.rooms.setJudgeThinking, {
           ...rest,
-          thinking: reasoningText.slice(0, 6000),
+          thinking: accumulatedThinking.slice(0, 6000),
         })
       }
 
-      // Phase 2: fast structured ruling (model already reasoned in Phase 1)
+      // Phase 2: structured ruling via agent component
+      const { thread } = await judgeAgent.continueThread(ctx, {
+        threadId: args.threadId,
+      })
       const { object } = await thread.generateObject({
-        prompt: 'Emití tu fallo formal según los criterios.',
+        prompt: `Emití tu fallo formal según los criterios.\n\nElementos: ${promptText}`,
         schema: rulingSchema,
       })
 
