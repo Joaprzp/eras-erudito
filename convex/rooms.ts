@@ -207,7 +207,7 @@ export const teamLobby = query({
         hasSubmitted: roundState.submittedTeamIds.includes(team._id),
         requiredResponseCount: roundState.requiredResponseCount,
       } : null,
-      self: { id: team._id, isHost: team.isHost, isEliminated: team.status === 'eliminated', money: team.money ?? 0, name: team.name, position: team.position ?? 0 },
+      self: { id: team._id, isHost: team.isHost, isEliminated: team.status === 'eliminated', money: team.money ?? 0, name: team.name, color: team.color, coins: team.coins ?? 0, position: team.position ?? 0 },
       shopEligible: room.shopTeamId === team._id,
       timerEnabled: room.timerEnabled ?? false,
       turnTeamId: room.turnTeamId,

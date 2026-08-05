@@ -1,7 +1,7 @@
 type TeamCockpitProps = {
   lobby: {
     self: { name: string; color: string; money: number; coins: number; isHost: boolean }
-    turnTeamId: string
+    turnTeamId?: string
     teams: Array<{ id: string; name: string; color: string; money: number; coins: number }>
   }
   isMyTurn: boolean

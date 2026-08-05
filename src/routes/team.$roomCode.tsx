@@ -196,6 +196,7 @@ function TeamRoom() {
             onBuyCoin={handleBuyCoin}
             onChooseCategory={handleChooseCategory}
             onSubmitResponse={handleSubmitResponse}
+            onToggleTimer={handleToggleTimer}
           />
         ) : (
           <form className="mt-7 space-y-6 rounded-[1.8rem] border-2 border-ink p-5 text-left" onSubmit={handleSubmit}>
@@ -286,6 +287,7 @@ function LobbyPanel({
   onAdvanceTurn,
   onBuyCoin,
   onSubmitResponse,
+  onToggleTimer,
 }: {
   lobby: TeamLobby
   error: string | null
@@ -305,6 +307,7 @@ function LobbyPanel({
   onAdvanceTurn: () => void
   onBuyCoin: () => void
   onSubmitResponse: (payload: string) => void
+  onToggleTimer: () => void
 }) {
   if (lobby === undefined) {
     return <p className="mt-6 text-ink/60">Recuperando tu plaza…</p>
@@ -359,7 +362,7 @@ function LobbyPanel({
       onStart={onStart}
       onLeave={onLeave}
       onRemove={onRemove}
-      onToggleTimer={handleToggleTimer}
+      onToggleTimer={onToggleTimer}
     />
   )
 }
@@ -611,7 +614,7 @@ const BET_OPTIONS = [100, 200, 300, 400, 500]
 const JUDGE_STALE_MS = 90 * 1000
 const CATEGORY_LABELS = { sequence: 'Secuencia', association: 'Asociación', common: 'En común', approximation: 'Aproximación' }
 
-type Team = { id: Id<'teams'>; coins: number; color: string; isHost: boolean; joinIndex: number; money: number; name: string; position: number }
+type Team = { id: Id<'teams'>; coins: number; color: string; isHost: boolean; isEliminated: boolean; joinIndex: number; money: number; name: string; position: number }
 
 type Judge = { status: 'deliberating' | 'decided' | 'deferred' | 'failed'; requestedAt: number; rationale?: string; error?: string }
 
@@ -641,7 +644,7 @@ type TeamLobby = {
   } | null
   shopEligible: boolean
   timerEnabled?: boolean
-  self: { id: Id<'teams'>; isHost: boolean; isEliminated?: boolean; money: number; name: string; position: number }
+  self: { id: Id<'teams'>; isHost: boolean; isEliminated?: boolean; money: number; name: string; color: string; coins: number; position: number }
   turnTeamId?: Id<'teams'>
   winnerTeamId?: Id<'teams'>
   teams: Team[]
