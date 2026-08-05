@@ -14,6 +14,6 @@ export const sync = query({
       threadId: args.threadId,
       streamArgs: args.streamArgs,
     })
-    return { streams: result ?? { kind: 'list', messages: [] } }
+    return { streams: result ?? { kind: 'list' as const, messages: [] } }
   },
 })

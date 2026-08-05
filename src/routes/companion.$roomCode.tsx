@@ -431,13 +431,18 @@ function JudgePanel({ judge }: { judge: Judge }) {
   )
 
   const thinking = useMemo(() => {
-    if (!streamingMessages) return ''
-    return streamingMessages
-      .flatMap((m) => m.parts ?? [])
-      .filter((part) => part.type === 'reasoning')
-      .map((part) => part.text)
-      .join('')
-  }, [streamingMessages])
+    // Try streaming reasoning parts first
+    if (streamingMessages) {
+      const reasoning = streamingMessages
+        .flatMap((m) => m.parts ?? [])
+        .filter((part) => part.type === 'reasoning')
+        .map((part) => part.text)
+        .join('')
+      if (reasoning) return reasoning
+    }
+    // Fallback: judge.thinking from the room (set after stream completes)
+    return judge.thinking ?? ''
+  }, [streamingMessages, judge.thinking])
 
   const [showThinking, setShowThinking] = useState(false)
 

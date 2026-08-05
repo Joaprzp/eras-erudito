@@ -69,7 +69,17 @@ export const decideCommon = internalAction({
       )
 
       // Wait for the reasoning stream to complete
-      await thinkingResult.text
+      const fullText = await thinkingResult.text
+
+      // Save the thinking text to the room as a fallback (client reads judge.thinking)
+      const reasoningText = 'reasoningText' in thinkingResult ? (thinkingResult as any).reasoningText : fullText
+      if (reasoningText) {
+        const { threadId: _threadId, promptMessageId: _promptMessageId, ...rest } = args
+        await ctx.runMutation(internal.rooms.setJudgeThinking, {
+          ...rest,
+          thinking: reasoningText.slice(0, 6000),
+        })
+      }
 
       // Phase 2: fast structured ruling (model already reasoned in Phase 1)
       const { object } = await thread.generateObject({

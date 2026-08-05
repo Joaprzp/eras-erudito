@@ -502,13 +502,16 @@ function HostRulingControls({ challengerName, targetName, isBusy, judge, pending
   )
 
   const thinking = useMemo(() => {
-    if (!streamingMessages) return ''
-    return streamingMessages
-      .flatMap((m) => m.parts ?? [])
-      .filter((part) => part.type === 'reasoning')
-      .map((part) => part.text)
-      .join('')
-  }, [streamingMessages])
+    if (streamingMessages) {
+      const reasoning = streamingMessages
+        .flatMap((m) => m.parts ?? [])
+        .filter((part) => part.type === 'reasoning')
+        .map((part) => part.text)
+        .join('')
+      if (reasoning) return reasoning
+    }
+    return judge?.thinking ?? ''
+  }, [streamingMessages, judge?.thinking])
 
   useEffect(() => {
     if (requestedAt === undefined) return

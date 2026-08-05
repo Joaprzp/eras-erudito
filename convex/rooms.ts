@@ -633,6 +633,19 @@ export const failCommonRuling = internalMutation({
   },
 })
 
+export const setJudgeThinking = internalMutation({
+  args: { ...commonRulingArgs, thinking: v.string() },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId)
+    if (!room || !room.round || room.round.roundId !== args.roundId) return
+    if (room.round.judge?.status !== 'deliberating') return
+
+    await ctx.db.patch(room._id, {
+      round: { ...room.round, judge: { ...room.round.judge, thinking: args.thinking } },
+    })
+  },
+})
+
 export const advanceTurn = mutation({
   args: { code: v.string(), token: v.string() },
   handler: async (ctx, args) => {
