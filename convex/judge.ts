@@ -61,9 +61,7 @@ export const decideCommon = internalAction({
         threadId: args.threadId,
         paginationOpts: { cursor: null, numItems: 100 },
       })
-      const promptMessage = Array.isArray(allMessages)
-        ? allMessages.find((m) => m._id === args.promptMessageId)
-        : undefined
+      const promptMessage = allMessages.page.find((m) => m._id === args.promptMessageId)
       const promptText = typeof promptMessage?.message?.content === 'string'
         ? promptMessage.message.content
         : Array.isArray(promptMessage?.message?.content)
