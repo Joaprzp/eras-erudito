@@ -1,7 +1,8 @@
 import { v } from 'convex/values'
+import { createThread, saveMessage } from '@convex-dev/agent'
 
-import { internal } from './_generated/api'
-import { internalMutation, internalQuery, mutation, query } from './_generated/server'
+import { components, internal } from './_generated/api'
+import { internalMutation, mutation, query } from './_generated/server'
 import type { MutationCtx, QueryCtx } from './_generated/server'
 import type { Id } from './_generated/dataModel'
 import { cardDeck, type CardCategory, type QuestionCard } from './cardDeck'
@@ -554,45 +555,50 @@ export const requestCommonRuling = mutation({
 
     const roundId = round.roundId
     if (!roundId) throw new Error('No encontramos la ronda en juego.')
+    const cardId = round.cardId
+    if (!cardId) throw new Error('No encontramos la tarjeta en juego.')
 
-    await ctx.db.patch(room._id, {
-      round: { ...round, judge: { status: 'deliberating', requestedAt: Date.now() } },
-      lastActivityAt: Date.now(),
-    })
-    await ctx.scheduler.runAfter(0, internal.judge.decideCommon, { roomId: room._id, roundId })
-  },
-})
-
-export const commonRulingInput = internalQuery({
-  args: commonRulingArgs,
-  handler: async (ctx, args) => {
-    const deliberation = await loadDeliberatingRound(ctx, args)
-    const cardId = deliberation?.round.cardId
-
-    if (!deliberation || !cardId) return null
-    const { room, round } = deliberation
-    const card = getCard('common', cardId)
-
-    if (card.category !== 'common') return null
-
+    const card = getCard('common', cardId) as QuestionCard & { category: 'common' }
     const teams = await listTeams(ctx, room._id)
     const responses = await ctx.db
       .query('responses')
-      .withIndex('by_round', (index) => index.eq('roundId', args.roundId))
+      .withIndex('by_round', (index) => index.eq('roundId', roundId))
       .collect()
+    const prompt = buildCommonRulingPrompt(card, responses, teams, round)
 
-    return {
-      clues: card.clues,
-      solution: card.solution,
-      answers: responses
-        .sort((left, right) => left.submittedAt - right.submittedAt)
-        .map((response, index) => ({
-          order: index + 1,
-          role: response.teamId === round.challengerId ? 'challenger' as const : 'target' as const,
-          teamName: teams.find((team) => team._id === response.teamId)?.name ?? 'Equipo',
-          text: String(JSON.parse(response.payload)),
-        })),
-    }
+    const threadId = await createThread(ctx, components.agent)
+    const { messageId } = await saveMessage(ctx, components.agent, {
+      threadId,
+      prompt,
+      agentName: 'judge',
+    })
+
+    await ctx.db.patch(room._id, {
+      round: { ...round, judge: { status: 'deliberating', requestedAt: Date.now(), threadId } },
+      lastActivityAt: Date.now(),
+    })
+    await ctx.scheduler.runAfter(0, internal.judge.decideCommon, {
+      roomId: room._id,
+      roundId,
+      threadId,
+      promptMessageId: messageId,
+    })
+  },
+})
+
+export const updateJudgeThinking = internalMutation({
+  args: {
+    ...commonRulingArgs,
+    thinking: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId)
+    if (!room || !room.round || room.round.roundId !== args.roundId) return
+    if (room.round.judge?.status !== 'deliberating') return
+
+    await ctx.db.patch(room._id, {
+      round: { ...room.round, judge: { ...room.round.judge, thinking: args.thinking } },
+    })
   },
 })
 
@@ -825,11 +831,17 @@ async function deleteRoom(
   roomId: Id<'rooms'>,
   knownTeams?: Awaited<ReturnType<typeof listTeams>>,
 ) {
+  const room = await ctx.db.get(roomId)
+  const threadId = room?.round?.judge?.threadId
   const teams = knownTeams ?? await listTeams(ctx, roomId)
   const responses = await ctx.db
     .query('responses')
     .withIndex('by_room', (index) => index.eq('roomId', roomId))
     .collect()
+
+  if (threadId) {
+    await ctx.runMutation(components.agent.threads.deleteAllForThreadIdAsync, { threadId })
+  }
 
   await Promise.all([
     ...teams.map((team) => ctx.db.delete(team._id)),
@@ -1009,6 +1021,36 @@ function getCard(category: CardCategory, cardId: string) {
 
   if (!card) throw new Error('No encontramos la tarjeta sorteada.')
   return card
+}
+
+function buildCommonRulingPrompt(
+  card: QuestionCard & { category: 'common' },
+  responses: Array<{ teamId: Id<'teams'>; payload: string; submittedAt: number }>,
+  teams: Array<{ _id: Id<'teams'>; name: string }>,
+  round: { challengerId: Id<'teams'> },
+) {
+  const answers = responses
+    .sort((left, right) => left.submittedAt - right.submittedAt)
+    .map((response, index) => {
+      const team = teams.find((t) => t._id === response.teamId)
+      return [
+        `- Equipo: ${team?.name ?? 'Equipo'}`,
+        `  Rol: ${response.teamId === round.challengerId ? 'Retador (challenger)' : 'Retado (target)'}`,
+        `  Orden de confirmación: ${index + 1}`,
+        `  Respuesta: ${String(JSON.parse(response.payload))}`,
+      ].join('\n')
+    })
+    .join('\n')
+
+  return [
+    `Elementos de la tarjeta: ${card.clues.join(', ')}.`,
+    `Respuesta oficial: ${card.solution}`,
+    '',
+    'Respuestas de los equipos:',
+    answers,
+    '',
+    'Emití tu fallo.',
+  ].join('\n')
 }
 
 function publicCard(card: QuestionCard, includeSolution: boolean) {

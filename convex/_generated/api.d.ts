@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as agent from "../agent.js";
 import type * as cardDeck from "../cardDeck.js";
 import type * as constants from "../constants.js";
 import type * as crons from "../crons.js";
@@ -26,6 +27,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  agent: typeof agent;
   cardDeck: typeof cardDeck;
   constants: typeof constants;
   crons: typeof crons;
@@ -64,4 +66,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  agent: import("@convex-dev/agent/_generated/component.js").ComponentApi<"agent">;
+};

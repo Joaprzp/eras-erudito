@@ -48,6 +48,8 @@ export default defineSchema({
       judge: v.optional(v.object({
         status: v.union(v.literal('deliberating'), v.literal('decided'), v.literal('deferred'), v.literal('failed')),
         requestedAt: v.number(),
+        threadId: v.optional(v.string()),
+        thinking: v.optional(v.string()),
         rationale: v.optional(v.string()),
         error: v.optional(v.string()),
       })),

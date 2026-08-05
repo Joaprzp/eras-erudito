@@ -90,6 +90,7 @@ Durante la espera, el companion solo muestra cuántos Equipos ya confirmaron: nu
 - Cinco elementos para los que se identifica una característica compartida.
 - Entrada móvil: texto breve.
 - Tras revelar las respuestas en el companion, el Fallo lo emite el Anfitrión desde su teléfono o el Juez si el Anfitrión lo convoca: gana Retador, gana Retado o Empate.
+- Mientras el Juez delibera, el companion y el anfitrión ven su razonamiento en vivo a medida que lo genera, lo que evita la espera sin retroalimentación. Si el modelo no admite razonamiento visible, se muestra una animación de espera.
 - El Juez responde con un fundamento que se muestra en el companion. El Anfitrión puede resolver a mano en cualquier momento, incluso mientras el Juez delibera, y si el Juez falla la ronda vuelve a él.
 - Ante respuestas vagas, ambiguas o incompletas, el Juez se abstiene en lugar de adivinar: publica su opinión y el Fallo queda en manos del Anfitrión.
 - Ante Empate —incluido el caso de ninguna respuesta aceptable— se devuelven las Apuestas y termina el Turno del Retador.

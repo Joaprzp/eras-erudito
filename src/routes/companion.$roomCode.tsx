@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
+import { useStreamingUIMessages } from '@convex-dev/agent/react'
 import { QRCodeSVG } from 'qrcode.react'
 
 import { api } from '../../convex/_generated/api'
@@ -424,7 +425,40 @@ function QuestionPanel({ round, state, teams }: { round: NonNullable<CompanionLo
 }
 
 function JudgePanel({ judge }: { judge: Judge }) {
+  const streamingMessages = useStreamingUIMessages(
+    api.agent.sync,
+    judge.status === 'deliberating' && judge.threadId ? { threadId: judge.threadId } : 'skip',
+  )
+
+  const thinking = useMemo(() => {
+    if (!streamingMessages) return ''
+    return streamingMessages
+      .flatMap((m) => m.parts ?? [])
+      .filter((part) => part.type === 'reasoning')
+      .map((part) => part.text)
+      .join('')
+  }, [streamingMessages])
+
+  const [showThinking, setShowThinking] = useState(false)
+
+  useEffect(() => {
+    if (thinking) {
+      setShowThinking(true)
+      return
+    }
+    if (judge.status !== 'deliberating') return
+    const timeout = window.setTimeout(() => setShowThinking(false), 2000)
+    return () => { window.clearTimeout(timeout); setShowThinking(false) }
+  }, [thinking, judge.status])
+
   if (judge.status === 'deliberating') {
+    if (showThinking && thinking) {
+      return <div aria-live="polite" className="mt-5 rounded-2xl border-2 border-mint/40 bg-mint/15 px-4 py-3">
+        <p className="text-[0.6rem] font-black uppercase tracking-[0.18em] text-ink/55">Juez deliberando</p>
+        <p className="mt-1.5 text-sm font-semibold leading-snug text-ink/85 whitespace-pre-wrap">{thinking}</p>
+        <span className="mt-1 inline-block h-2 w-2 animate-pulse rounded-full bg-coral" />
+      </div>
+    }
     return <div aria-live="polite" className="mt-5 flex items-center gap-3 rounded-2xl border-2 border-dashed border-ink/25 bg-mint/25 px-4 py-3">
       <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-coral" />
       <p className="font-display text-2xl tracking-[-0.04em]">El juez está deliberando…</p>
@@ -522,7 +556,7 @@ type CompanionLobby = {
   winnerTeamId?: Id<'teams'>
 }
 
-type Judge = { status: 'deliberating' | 'decided' | 'deferred' | 'failed'; requestedAt: number; rationale?: string; error?: string }
+type Judge = { status: 'deliberating' | 'decided' | 'deferred' | 'failed'; requestedAt: number; threadId?: string; thinking?: string; rationale?: string; error?: string }
 
 const CATEGORY_LABELS = { sequence: 'Secuencia', association: 'Asociación', common: 'En común', approximation: 'Aproximación' }
 
