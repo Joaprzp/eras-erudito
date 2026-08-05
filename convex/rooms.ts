@@ -1318,9 +1318,7 @@ export const handleApproximationTimeout = internalMutation({
     }
 
     const result = await calculateAutomaticResult(ctx, room, round)
-    await ctx.db.patch(room._id, {
-      round: { ...round, phase: 'revealed', result: { ...result, payout: round.wager ?? 0 } },
-      lastActivityAt: Date.now(),
-    })
+    await settleRound(ctx, room, round, result)
+    await ctx.db.patch(room._id, { lastActivityAt: Date.now() })
   },
 })
